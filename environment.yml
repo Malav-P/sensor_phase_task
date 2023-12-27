@@ -1,0 +1,11 @@
+name: /Users/malavpatel/Research/SensorTasking/env
+channels:
+  - conda-forge
+dependencies:
+  - gymnasium
+  - pytorch
+  - numpy
+  - stable-baselines3
+  - ipykernel
+  - scipy
+prefix: /Users/malavpatel/Research/SensorTasking/env
