@@ -38,15 +38,25 @@ class KalmanFilter:
         self._forecast(steps=1)
         self._update(Z = Z, R_invs = R_invs)
 
-    def _update(self, Z, R_invs):
+    def _update(self, Z, R_invs, H_s = None):
         if Z is None:
             self.Pa = self.Pf
             self.xa = self.xf
 
         else:
+            n_obs = R_invs.shape[2]
             Pf_inv = np.linalg.inv(self.Pf)
-            self.Pa = np.linalg.inv(Pf_inv + np.sum( R_invs, axis=2 ))
-            self.xa = self.Pa @ (Pf_inv @ self.xf + sum( [R_invs[:, :, i] @ Z[:,i] for  i in range(Z.shape[1])] ))
+
+            if H_s is None:
+                information_matrices = R_invs
+                self.Pa = np.linalg.inv(Pf_inv + np.sum( information_matrices, axis=2 ))
+                self.xa = self.Pa @ (Pf_inv @ self.xf + sum( [R_invs[:, :, i] @ Z[:,i] for  i in range(n_obs)] ))
+
+            else:  
+                information_matrices = np.array([H_s[:,:,i].T @ R_invs[:,:,i] @ H_s[:,:,i] for i in range(n_obs)])
+                self.Pa = np.linalg.inv(Pf_inv + np.sum( information_matrices, axis=2 ))
+                self.xa = self.Pa @ (Pf_inv @ self.xf + sum( [H_s[:,:,i].T @ R_invs[:, :, i] @ Z[:,i] for  i in range(n_obs)] ))
+
     
     def _forecast(self, steps):
         ua = np.hstack((self.xa, np.ravel(self.Pa)))
