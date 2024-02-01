@@ -73,7 +73,7 @@ class SpaceEnv(Env):
 
         return obs, info
     
-    def get_reward(self, threshold = 1):
+    def get_reward(self, threshold = 0.001):
         reward = 0
 
         for kalman_object in self.kalman_objects:

@@ -14,7 +14,8 @@ class KalmanFilter:
         self.xa = xof
         self.Pa = Pof
         self.dim = xof.size
-        self.Q = np.zeros(shape=(self.dim, self.dim))
+        # self.Q = np.zeros(shape=(self.dim, self.dim))
+        self.Q = 0.001 * np.eye(self.dim)
 
         def _kalman_system(t, u):
             d = self.dim
@@ -25,7 +26,7 @@ class KalmanFilter:
             F = jac(t, x, *params)
 
             dx = func(t, x, *params)
-            dP = F @ P + P @ F.T
+            dP = F @ P + P @ F.T + self.Q
 
             du = np.hstack((dx, np.ravel(dP)))
 
@@ -56,6 +57,11 @@ class KalmanFilter:
                 information_matrices = np.array([H_s[:,:,i].T @ R_invs[:,:,i] @ H_s[:,:,i] for i in range(n_obs)])
                 self.Pa = np.linalg.inv(Pf_inv + np.sum( information_matrices, axis=2 ))
                 self.xa = self.Pa @ (Pf_inv @ self.xf + sum( [H_s[:,:,i].T @ R_invs[:, :, i] @ Z[:,i] for  i in range(n_obs)] ))
+            
+        
+        self.Pa = (self.Pa + self.Pa.T)/2 # ensure posterior covariance symmetric
+
+        assert np.allclose(self.Pa, self.Pa.T, rtol=1e-5, atol=1e-8)
 
     
     def _forecast(self, steps):
@@ -65,6 +71,11 @@ class KalmanFilter:
         uf = self.fcint.propagate(steps=steps)
         self.xf = uf[:self.dim]
         self.Pf = np.reshape(uf[self.dim:], newshape=(self.dim, self.dim))
+
+        self.Pf = 0.5 * (self.Pf + self.Pf.T) # ensure symmetric covariance.
+
+        assert np.allclose(self.Pf, self.Pf.T, rtol=1e-5, atol=1e-8)
+
         return
     
     def reset(self):
