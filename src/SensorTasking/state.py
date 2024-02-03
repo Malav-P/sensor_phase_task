@@ -40,6 +40,7 @@ class Dynamics(State):
     
     def reset(self):
         self.x = self.ic
+        self.t = 0
         self.r.set_initial_value(self.ic, 0)
 
     def set_initial_value(self, y, t=0):

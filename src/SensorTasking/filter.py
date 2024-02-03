@@ -6,7 +6,7 @@ import numpy as np
 from .state import Dynamics
 
 class KalmanFilter:
-    def __init__(self, timestep, xof, Pof, func, jac, params):
+    def __init__(self, timestep, xof, Pof, func, jac, f_params=None, jac_params=None):
         self.ic = xof
         self.ic_cov = Pof
         self.xf = xof
@@ -23,9 +23,9 @@ class KalmanFilter:
             x = u[:d]
             P = np.reshape(u[d:], newshape=(d, d))
 
-            F = jac(t, x, *params)
+            F = jac(t, x, *jac_params)
 
-            dx = func(t, x, *params)
+            dx = func(t, x, *f_params)
             dP = F @ P + P @ F.T + self.Q
 
             du = np.hstack((dx, np.ravel(dP)))

@@ -6,13 +6,13 @@ from .state import Dynamics
 from .observation_model import some_function
 
 class SpaceEnv(Env):
-    def __init__(self, agent_ICs, target_ICs, target_covs, metric, maxsteps, tstep, f, jac):
-        self.M  = target_ICs.shape[0]
-        self.N = agent_ICs.shape[0]
+    def __init__(self, agents, targets, metric, maxsteps, tstep):
+        self.M  = targets.size
+        self.N = agents.size
 
-        self.kalman_objects = np.array( [KalmanFilter(timestep=tstep, xof=target_ICs[i, :-1], Pof=target_covs[:, :, i], func=f, jac=jac) for i in range(self.M)] ) 
-        self.observers = np.array( [Dynamics(x0=agent_ICs[i,:-1], tstep=tstep, f=f, jac=jac) for i in range(self.N)] )
-        self.truths = np.array( [Dynamics(x0=target_ICs[i, :-1], tstep=tstep, f=f, jac=jac) for i in range(self.M)] )
+        self.kalman_objects = np.array( [KalmanFilter(timestep=tstep, xof=targets[i]["state"], Pof=targets[i]["covariance"], func=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] ) 
+        self.observers = np.array( [Dynamics(x0=agents[i]["state"], tstep=tstep, f=agents[i]["f"], jac=agents[i]["jac"], f_params=agents[i]["f_params"], jac_params=agents[i]["jac_params"]) for i in range(self.N)] )
+        self.truths = np.array( [Dynamics(x0=targets[i]["state"], tstep=tstep, f=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] )
 
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.M,), dtype=np.float32)
         self.action_space = spaces.MultiDiscrete([self.M+1 for i in range(self.N)])
@@ -57,7 +57,7 @@ class SpaceEnv(Env):
         return obs, reward, terminated, False, info
     
     def reset(self, seed=None, options=None):
-        super().init(seed=seed)
+        super().reset(seed=seed)
         self.elapsed_steps = 0
         for kalman_object in self.kalman_objects:
             kalman_object.reset()
