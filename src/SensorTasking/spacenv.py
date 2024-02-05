@@ -73,7 +73,7 @@ class SpaceEnv(Env):
 
         return obs, info
     
-    def get_reward(self, threshold = 0.001):
+    def get_reward(self, threshold = 0.0005):
         reward = 0
 
         for kalman_object in self.kalman_objects:
@@ -87,7 +87,7 @@ class SpaceEnv(Env):
         return reward
     
     def get_observation(self):
-        tr_cov = np.zeros(self.kalman_objects.size)
+        tr_cov = np.zeros(self.kalman_objects.size, dtype=np.float32)
 
         for i, kalman_object in enumerate(self.kalman_objects):
             tr_cov[i] = np.trace(kalman_object.Pa)
@@ -95,4 +95,4 @@ class SpaceEnv(Env):
         return tr_cov
     
     def get_info(self):
-        return None
+        return {"info" : None}

@@ -51,3 +51,6 @@ docs/_build/
 
 # Virtual environments
 env/
+
+# Temporary files
+tmp/
