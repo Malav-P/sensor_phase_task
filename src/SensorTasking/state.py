@@ -56,14 +56,37 @@ class Spline(State):
         self.spl = spl
 
     def propagate(self, steps=1):
-        self.x = self.spl(self.t + steps*self.tstep)
         self.t += steps*self.tstep
+        self.x = self.spl(self.t)
         return self.x
     
     def reset(self):
         self.x = self.ic
         self.t = 0
 
+    def set_initial_value(self, y, t=0):
+        self.x = y
+        self.t = t
+
+
+class Analytic(State):
+    def __init__(self, x0, tstep, functions):
+        super().__init__(x0, tstep)
+        self.functions = functions
+
+        assert x0.size == functions.size, "number of variables and functions mismatch"
+
+    def propagate(self, steps=1):
+        self.t += steps*self.tstep
+        for i in range(self.x.size):
+            self.x[i] = self.functions[i](self.t)
+
+        return self.x
+    
+    def reset(self):
+        self.x = self.ic
+        self.t = 0
+    
     def set_initial_value(self, y, t=0):
         self.x = y
         self.t = t
