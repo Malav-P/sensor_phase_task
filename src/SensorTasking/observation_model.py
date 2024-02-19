@@ -15,6 +15,16 @@ class DummyModel(ObsModel):
     def __init__(self):
         super().__init__(states=[])
 
+    def _compute(self, truth, observer):
+        return None
+    
+    def get_available_actions(self, truths, observers, env):
+        # available_actions = [0]
+        # if env.n_obs < env.budget:
+        #     available_actions = [0, 1, 2]
+
+        return np.array([0, 1, 2])
+
 
     def make_measurement(self, truth, observers, verbose=False):
 
@@ -33,6 +43,7 @@ class DummyModel(ObsModel):
 
         if verbose:
             print(f"Observation Matrix : {Z}")
+
 
         return Z, R_invs
 
@@ -143,20 +154,26 @@ class ApparentMag(ObsModel):
 
         return Z, R_invs
     
-    def get_available_actions(self, truths, observers):
-        available_actions = [] # in the future, maybe include the null action 
+    def get_available_actions(self, truths, observers, env):
+        available_actions = []
+
+        # if env.n_obs < env.budget:
+            
 
         for i, truth in enumerate(truths):
-            available = False
-            for j, observer in enumerate(observers):
-                if not (self._deadzone(truth, observer, "Moon") or self._deadzone(truth, observer, "Earth")):
-                    available = True
-                    break
+
+            available = self.is_visible(truth, observers)
             
             if available:
                 available_actions.append(i+1)
-        
+    
         return np.array(available_actions)
             
 
-
+    def is_visible(self, target, observers):
+        visible = False
+        for j, observer in enumerate(observers):
+            if not (self._deadzone(target, observer, "Moon") or self._deadzone(target, observer, "Earth")):
+                visible = True
+                break
+        return visible

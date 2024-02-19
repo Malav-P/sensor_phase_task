@@ -3,9 +3,10 @@ from gymnasium import Env, spaces
 
 from .filter import KalmanFilter
 from .state import Dynamics
+from .rewards import reward1, reward2
 
 class SpaceEnv(Env):
-    def __init__(self, agents, targets, obs_model, maxsteps, tstep, obs_class = None):
+    def __init__(self, agents, targets, obs_model, maxsteps, tstep, obs_class = None, budget = 150):
         self.M  = targets.size
         self.N = agents.size
 
@@ -23,7 +24,10 @@ class SpaceEnv(Env):
         self.maxsteps = maxsteps
 
         self.prev_action = None
-        self.prev_available_actions = np.array([1, 2])
+        self.prev_available_actions = np.array([0, 1, 2])
+
+        self.budget = budget
+        self.n_obs = 0
 
     def step(self, action):
         self.prev_available_actions = self.get_available_actions()
@@ -52,6 +56,7 @@ class SpaceEnv(Env):
             kalman_object = self.kalman_objects[i]
             
             if count > 0:
+                self.n_obs += count
                 truth = self.truths[i]
                 observers = self.observers[np.where(action==i+1)[0]]
                 Z, R_invs = self.obs_model.make_measurement(truth, observers, verbose=False)
@@ -64,7 +69,7 @@ class SpaceEnv(Env):
         reward = self.get_reward()
         obs = self.get_observation()
         info = self.get_info()
-        terminated = self.elapsed_steps == self.maxsteps
+        terminated = ((self.elapsed_steps == self.maxsteps))
         return obs, reward, terminated, False, info
     
     def reset(self, seed=None, options=None):
@@ -84,26 +89,17 @@ class SpaceEnv(Env):
             state.reset()
 
         self.prev_action = None
-        self.prev_available_actions = np.array([1, 2])
+        self.prev_available_actions = np.array([0,1, 2])
+        self.n_obs = 0
 
         obs = self.get_observation()
         info = self.get_info()
 
-        
 
         return obs, info
     
     def get_reward(self):
-
-        reward = 0
-
-        if (self.prev_action not in self.prev_available_actions) and (self.prev_action is not None):
-            reward -= 10
-
-        for kalman_object in self.kalman_objects[[x-1 for x in self.prev_available_actions]]:
-            reward -= 100*np.trace(kalman_object.P)
-
-        return reward
+        return reward1(self)
     
     def get_observation(self):
         obs =  self.obs_class.get_observation(self)
@@ -125,5 +121,17 @@ class SpaceEnv(Env):
         return info
     
     def get_available_actions(self):
-        return self.obs_model.get_available_actions(self.truths, self.observers)
+        return self.obs_model.get_available_actions(self.truths, self.observers, self)
+    
+    def valid_action_mask(self):
+        mask = [True, True, True]
+
+        available_action = self.get_available_actions()
+
+        for i,action in enumerate([0, 1, 2]):
+            if action not in available_action:
+                mask[i] = False
+
+        return mask
+
 

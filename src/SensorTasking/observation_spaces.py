@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from gymnasium.spaces import Dict, Box, MultiDiscrete, Discrete
+from gymnasium.spaces import Dict, Box, MultiDiscrete, Discrete, MultiBinary
 import numpy as np
 
 
@@ -29,7 +29,10 @@ class Type1(ObsClass):
             dictspace[targetstate] = Box(low=-10.0, high=10.0, shape=(dim,), dtype=np.float32)
 
             targetcov = f"target{i+1}_cov"
-            dictspace[targetcov] = Box(low=-10.0, high=10.0, shape=(dim,), dtype=np.float32)
+            dictspace[targetcov] = Box(low=-10.0, high=10.0)
+
+            targetvis = f"target{i+1}_vis"
+            dictspace[targetvis] = MultiBinary(1)
 
         return Dict(dictspace)
     
@@ -39,9 +42,16 @@ class Type1(ObsClass):
 
         for i, target in enumerate(env.kalman_objects):
             obs[f"target{i+1}_state"] = np.float32(target.x)
-            obs[f"target{i+1}_cov"] = np.float32(np.diag(target.P))
+            obs[f"target{i+1}_cov"] = np.array([np.trace(target.P)], dtype=np.float32)
+
+            if env.obs_model.is_visible(target, env.observers):
+                obs[f"target{i+1}_vis"] = np.array([1], dtype=np.int8)
+            else:
+                obs[f"target{i+1}_vis"] = np.array([0], dtype=np.int8)
 
         return obs
+    
+
     
 class Type2(ObsClass):
     def __init__(self) -> None:

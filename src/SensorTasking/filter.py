@@ -11,8 +11,10 @@ class KalmanFilter:
         self.ic_cov = Pof
         self.x = xof
         self.P = Pof
+        self.P_prev = Pof
         self.dim = xof.size
         self.Q = 0.0001 * np.eye(self.dim)
+
 
         def _kalman_system(t, u):
             d = self.dim
@@ -33,6 +35,8 @@ class KalmanFilter:
         self.fcint = Dynamics(u0, timestep, _kalman_system)
 
     def propagate(self, Z, R_invs):
+        self.P_prev = self.P
+
         self._forecast(steps=1)
         self._update(Z = Z, R_invs = R_invs)
 
@@ -76,4 +80,5 @@ class KalmanFilter:
     def reset(self):
         self.x = self.ic
         self.P = self.ic_cov
+        self.P_prev = self.ic_cov
         self.fcint.reset()
