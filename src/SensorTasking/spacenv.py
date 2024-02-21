@@ -99,7 +99,7 @@ class SpaceEnv(Env):
         return obs, info
     
     def get_reward(self):
-        return reward1(self)
+        return reward2(self)
     
     def get_observation(self):
         obs =  self.obs_class.get_observation(self)

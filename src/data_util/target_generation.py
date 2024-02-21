@@ -15,14 +15,14 @@ class TargetGenerator:
         self.r = ode(cr3bp, jac_cr3bp).set_integrator('dop853').set_f_params(*mu).set_jac_params(*mu)
 
 
-    def gen_phased_ics(self, num_targets, stochastic = True):
+    def gen_phased_ics(self, num_targets, gen_P = True):
 
         if isinstance(num_targets, list):
             num_targets = np.array(num_targets)
         elif isinstance(num_targets, int):
             num_targets = num_targets * np.ones(self.num_options, dtype=int)
         
-        if stochastic:
+        if gen_P:
             target_P_0 = 0.001 * np.eye(6)
         else:
             target_P_0 = None
