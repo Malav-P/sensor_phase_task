@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.integrate import ode
+from scipy.interpolate import make_interp_spline
 
 from .cr3bp import cr3bp, jac_cr3bp
 
@@ -67,6 +68,44 @@ class TargetGenerator:
                 targets.append(target)
 
         return np.array(targets)
+    
+    def gen_state_history(self, catalog_ID, n_points):
+
+        tt = np.linspace(0, self.periods[catalog_ID], n_points)
+        data = np.zeros(shape=(n_points, 1 + self.dim))
+
+        
+        ic = self.catalog[catalog_ID]
+
+        data[:, 0] = tt
+        data[0, 1:] = ic
+
+        self.r.set_initial_value(ic, t = 0)
+
+        for i in range(1, tt.size):
+            data[i, 1:] = self.r.integrate(tt[i])
+
+
+        return data
+    
+    def normalize_data(self, data, LU = 1.0, TU = 1.0, center = np.array([0, 0, 0])):
+        norm_data = np.copy(data)
+        norm_data[:, 0] = (data[:,0] - data[0, 0]) / TU
+        norm_data[:, [1, 2, 3]] = data[:, [1, 2, 3]] / LU + np.tile(center, (data.shape[0], 1))
+    
+
+        return norm_data
+    
+    def make_spline(self, data):
+        x = np.append(data[:,0], data[-1, 0] + data[1,0])
+        y = np.append(data[:, [1 ,2 ,3]], [data[0, [1, 2, 3]]], axis=0)
+
+        bspl = make_interp_spline(x, y, k=3, bc_type='periodic', axis=0)
+
+        return bspl
+
+
+
             
 
             
