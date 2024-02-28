@@ -4,11 +4,12 @@ import numpy as np
 def reward1(self):
         reward = 0
 
-        if (self.prev_action not in self.prev_available_actions) and (self.prev_action is not None):
+        if np.any([self.prev_action[i] not in self.available_actions[i] for i in range(self.N)]):
             reward -= 10
 
-        for kalman_object in self.kalman_objects[[x-1 for x in self.prev_available_actions]]:
-            reward -= 10*np.trace(kalman_object.P)
+        for kalman_object in self.kalman_objects:
+            if np.any([self.obs_model.is_visible(kalman_object,observer) for observer in self.observers]):
+                reward -= 10*np.trace(kalman_object.P)
 
         return reward
 
@@ -17,11 +18,12 @@ def reward2(self):
      
         reward = 0
 
-        if (self.prev_action not in self.prev_available_actions) and (self.prev_action is not None):
+        if np.any([self.prev_action[i] not in self.available_actions[i] for i in range(self.N)]):
             reward -= 10
 
-        for kalman_object in self.kalman_objects[[x-1 for x in self.prev_available_actions]]:
-            reward += 100 * (np.trace(kalman_object.P_prev) - np.trace(kalman_object.P))
+        for kalman_object in self.kalman_objects:
+            if np.any([self.obs_model.is_visible(kalman_object,observer) for observer in self.observers]):
+                reward += 100 * (np.trace(kalman_object.P_prev) - np.trace(kalman_object.P))
 
         return reward
 

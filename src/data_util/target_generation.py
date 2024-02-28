@@ -17,13 +17,16 @@ class TargetGenerator:
 
     def gen_phased_ics(self, num_targets, gen_P = True):
 
+        LU = 384400
+        TU = 3.751902619517228e+05
+
         if isinstance(num_targets, list):
             num_targets = np.array(num_targets)
         elif isinstance(num_targets, int):
             num_targets = num_targets * np.ones(self.num_options, dtype=int)
         
         if gen_P:
-            target_P_0 = 0.001 * np.eye(6)
+            target_P_0 = np.block([[((500 / LU)**2) * np.eye(3), np.zeros(shape=(3,3))], [np.zeros(shape=(3,3)), ((0.001 * TU/LU)**2) * np.eye(3)]]) # 500 km uncertainty in position and 0.001 km/s uncertainty in velocity
         else:
             target_P_0 = None
 

@@ -21,4 +21,23 @@ def run_myopic_policy(env):
 
     return cum_reward
 
+def func(x, y, env):
+    n_observers = x.size
+    assert y.shape[0] == n_observers, "control not given for all observers!"
+
+
+    obs, info = env.reset()
+    terminated = False
+    
+    cum_reward = 0
+
+    for control in y:
+        obs, reward, terminated, tmp, info = env.step(control)
+
+        cum_reward += reward
+
+    return cum_reward
+
+
+
             

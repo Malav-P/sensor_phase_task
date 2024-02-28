@@ -9,7 +9,7 @@ class ObsClass(ABC):
         super().__init__()
 
     @abstractmethod
-    def gen_observation_space(self, num_targets, dim=6):
+    def gen_observation_space(self, num_targets, num_observers=1, dim=6):
         pass
 
     @abstractmethod
@@ -21,7 +21,7 @@ class Type1(ObsClass):
     def __init__(self) -> None:
         super().__init__()
 
-    def gen_observation_space(self, num_targets, dim=6):
+    def gen_observation_space(self, num_targets, num_observers=1, dim=6):
         dictspace = {}
 
         for i in range(num_targets):
@@ -32,7 +32,7 @@ class Type1(ObsClass):
             dictspace[targetcov] = Box(low=-10.0, high=10.0)
 
             targetvis = f"target{i+1}_vis"
-            dictspace[targetvis] = MultiBinary(1)
+            dictspace[targetvis] = MultiBinary(num_observers)
 
         return Dict(dictspace)
     
@@ -44,10 +44,8 @@ class Type1(ObsClass):
             obs[f"target{i+1}_state"] = np.float32(target.x)
             obs[f"target{i+1}_cov"] = np.array([np.trace(target.P)], dtype=np.float32)
 
-            if env.obs_model.is_visible(target, env.observers):
-                obs[f"target{i+1}_vis"] = np.array([1], dtype=np.int8)
-            else:
-                obs[f"target{i+1}_vis"] = np.array([0], dtype=np.int8)
+            obs[f"target{i+1}_vis"] = np.array([env.obs_model.is_visible(target,observer) for observer in env.observers], dtype=np.int8)
+
 
         return obs
     
@@ -57,7 +55,7 @@ class Type2(ObsClass):
     def __init__(self) -> None:
         super().__init__()
 
-    def gen_observation_space(self, num_targets, dim=6):
+    def gen_observation_space(self, num_targets, num_observers = 1, dim=6):
         return Box(low=-np.inf, high=np.inf, shape=(num_targets,), dtype=np.float32)
 
     def get_observation(self, env):

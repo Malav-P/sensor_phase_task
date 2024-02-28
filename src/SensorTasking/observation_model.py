@@ -60,32 +60,35 @@ class ApparentMag(ObsModel):
         tstep = tstep_
         functions = np.array([lambda t : AU*np.cos(ws*t + sun_phasing), lambda t : AU*np.sin(ws*t + sun_phasing), lambda t: 0])
 
+        self.params = params
         sun = Analytic(x0, tstep, functions)
         super().__init__(np.array([sun]))
-        self.params = params
+        
     
     def _compute(self, truth, observer):
-        ms = self.params["ms"]
-        aspec = self.params["aspec"]
-        adiff = self.params["adiff"]
-        d = self.params["d"]
-
-        rS = self.states[0].x[:3]
-        rO = observer.x[:3]
-        rT = truth.x[:3]
-
-
-        rOT = rT - rO
-        rST = rT - rS
-
-        zeta = np.linalg.norm(rOT)
-        psi = np.arctan2(np.linalg.norm(np.cross(rOT, rST)), np.dot(rOT, rST))
-        pdiff = (2/(3*np.pi)) * (np.sin(psi) + (np.pi - psi)*np.cos(psi))
 
         if self._deadzone(truth, observer, body="Earth") or self._deadzone(truth, observer, body="Moon"):
             apmag = np.inf
 
         else:
+            ms = self.params["ms"]
+            aspec = self.params["aspec"]
+            adiff = self.params["adiff"]
+            d = self.params["d"]
+
+            rS = self.states[0].x[:3]
+            rO = observer.x[:3]
+            rT = truth.x[:3]
+
+
+            rOT = rT - rO
+            rST = rT - rS
+
+            zeta = np.linalg.norm(rOT)
+            psi = np.arctan2(np.linalg.norm(np.cross(rOT, rST)), np.dot(rOT, rST))
+            pdiff = (2/(3*np.pi)) * (np.sin(psi) + (np.pi - psi)*np.cos(psi))
+
+
             apmag = ms - 2.5 * np.log10((d**2)/(zeta**2)*(aspec/4 + adiff*pdiff))
 
         return apmag
@@ -155,25 +158,22 @@ class ApparentMag(ObsModel):
         return Z, R_invs
     
     def get_available_actions(self, truths, observers, env):
-        available_actions = []
+        available_actions = np.full((observers.size, truths.size + 1), -1, dtype=int)
 
-        # if env.n_obs < env.budget:
-            
-
-        for i, truth in enumerate(truths):
-
-            available = self.is_visible(truth, observers)
-            
-            if available:
-                available_actions.append(i+1)
-    
-        return np.array(available_actions)
-            
-
-    def is_visible(self, target, observers):
-        visible = False
         for j, observer in enumerate(observers):
-            if not (self._deadzone(target, observer, "Moon") or self._deadzone(target, observer, "Earth")):
-                visible = True
-                break
+        
+            for i, truth in enumerate(truths):
+
+                if self.is_visible(truth, observer):
+                    available_actions[j, i+1] = i + 1
+    
+        return available_actions
+            
+
+    def is_visible(self, target, observer):
+        visible = False
+        
+        if not (self._deadzone(target, observer, "Moon") or self._deadzone(target, observer, "Earth")):
+            visible = True
+
         return visible

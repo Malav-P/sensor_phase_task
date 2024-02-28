@@ -13,7 +13,7 @@ class KalmanFilter:
         self.P = Pof
         self.P_prev = Pof
         self.dim = xof.size
-        self.Q = 0.0001 * np.eye(self.dim)
+        self.Q = 1e-9 * np.eye(self.dim)
 
 
         def _kalman_system(t, u):
@@ -36,9 +36,10 @@ class KalmanFilter:
 
     def propagate(self, Z, R_invs):
         self.P_prev = self.P
-
-        self._forecast(steps=1)
+        
         self._update(Z = Z, R_invs = R_invs)
+        self._forecast(steps=1)
+        
 
     def _update(self, Z, R_invs, H_s = None):
         if Z is None:
