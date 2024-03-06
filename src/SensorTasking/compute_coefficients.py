@@ -7,8 +7,6 @@ import pygmo
 sys.path.append("../")
 
 from .spacenv import SpaceEnv
-from .observation_model import ApparentMag
-from .observation_spaces import Type1
 from data_util.target_generation import TargetGenerator
 
 def compute_coefficients(env):
@@ -27,7 +25,7 @@ def compute_coefficients(env):
 
     for k in range(env.maxsteps):
 
-        out = env.bare_step()
+        out = env.step()
 
         Hs = out[-1]
 
@@ -66,50 +64,23 @@ def solve_model(information):
 
 
 class SSA_Problem():
-    def __init__(self, target_ics, target_periods,  agent_ics) -> None:
+    def __init__(self, target_ics, target_periods,  agent_ics, agent_periods) -> None:
         tg = TargetGenerator(target_ics, periods=target_periods)
-        self.targets = tg.gen_phased_ics([1, 1], gen_P=True)
+        targets = tg.gen_phased_ics([1, 1], gen_P=True)
 
-        self.ag = TargetGenerator(agent_ics, periods = [6.45])
-        self.num_agents = 1
+        self.ag = TargetGenerator(agent_ics, periods = agent_periods)
+        tmp_agents = self.ag.gen_phased_ics_from([0.0])
+        self.num_agents = len(agent_periods)
 
         self.maxsteps = 215
         self.tstep = 0.015
-        self.obs_class = Type1()
 
-        # mass parameter of earth-moon system
-        mu = 1.215058560962404e-02
-        # apparent magnitude of sun
-        ms = -26.4
-        # specular reflection coefficient
-        aspec = 0
-        # diffuse reflection coefficient
-        adiff = 0.2
-        # diameter of target (LU)
-        d = 0.001 / 384400
-        # earth radius (LU)
-        rearth = 6371 / 384400
-        # moon radius (LU)
-        rmoon = 1737.4 / 384400
-
-        self.params = {
-            "mu":mu,
-            "ms":ms,
-            "aspec":aspec,
-            "adiff":adiff,
-            "d":d,
-            "rearth":rearth,
-            "rmoon":rmoon
-        }
-
-        self.obs_model = ApparentMag(self.params, self.tstep)
-
-
+        self.env = SpaceEnv(tmp_agents, targets, self.maxsteps, self.tstep)
 
     def fitness(self, x):
 
-        env = self._gen_env(x)
-        information = compute_coefficients(env)
+        self._gen_env(x)
+        information = compute_coefficients(self.env)
         control, objective = solve_model(information)
 
         return objective
@@ -119,5 +90,7 @@ class SSA_Problem():
     
     def _gen_env(self, x):
         agents = self.ag.gen_phased_ics_from(x)
-        env = SpaceEnv(agents, self.targets, self.obs_model, self.maxsteps, self.tstep, obs_class=self.obs_class)
+        self.env.reset_new_agents(agents=agents)
+
+        return
 

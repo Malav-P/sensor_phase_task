@@ -1,91 +1,23 @@
 import numpy as np
-import numpy.matlib as npm
-from gymnasium import Env, spaces
+from .state import Spline
 
-from .filter import KalmanFilter
-from .state import Dynamics, Spline
-from .rewards import reward1, reward2
-
-class SpaceEnv(Env):
-    def __init__(self, agents, targets, obs_model, maxsteps, tstep, obs_class = None, budget = 150):
+class SpaceEnv:
+    def __init__(self, agents, targets, maxsteps, tstep):
         self.M  = targets.size
         self.N = agents.size
 
-        self.kalman_objects = np.array( [KalmanFilter(timestep=tstep, xof=targets[i]["state"], Pof=targets[i]["covariance"], func=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] ) 
-        # self.observers = np.array( [Dynamics(x0=agents[i]["state"], tstep=tstep, f=agents[i]["f"], jac=agents[i]["jac"], f_params=agents[i]["f_params"], jac_params=agents[i]["jac_params"]) for i in range(self.N)] )
-        # self.truths = np.array( [Dynamics(x0=targets[i]["state"], tstep=tstep, f=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] )
+        self.maxsteps = maxsteps
+        self.tstep = tstep
+        self.elapsed_steps = 0
+
         self.observers = np.array( [Spline( tstep=tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
         self.truths = np.array( [Spline( tstep=tstep, spl=targets[i]["spline"], stm_spl = targets[i]["stm_spline"], period=targets[i]["period"]) for i in range(self.M)] )
 
-        self.obs_class = obs_class
-        self.obs_model = obs_model
 
-        self.observation_space = obs_class.gen_observation_space(self.M, self.N)
-        self.action_space = spaces.MultiDiscrete([self.M+1 for i in range(self.N)])
 
-        self.elapsed_steps = 0
-        self.maxsteps = maxsteps
-
-        self.prev_action = np.zeros(self.N)
-        self.available_actions = npm.repmat(np.arange(0, self.M+1), self.N, 1)
-
-        self.budget = budget
-        self.n_obs = 0
-
-    def step(self, action):
-
-        self.elapsed_steps += 1
-
-        uniques, cs = np.unique(action, return_counts=True)
-        counts = np.zeros(self.M+1)
-
-        for tar, c in zip(uniques, cs):
-            counts[tar] = c
-
-        counts = counts[1:]
-
-        for i, count in enumerate(counts):
-            kalman_object = self.kalman_objects[i]
-            
-            if count > 0:
-                self.n_obs += count
-                truth = self.truths[i]
-                observers = self.observers[np.where(action==i+1)[0]]
-                Z, R_invs = self.obs_model.make_measurement(truth, observers, verbose=False)
-
-            else:
-                Z, R_invs = None, None
-            
-            kalman_object.propagate(Z=Z, R_invs=R_invs)  # update followed by forecast
-
-        
-        for state in self.obs_model.states:
-            state.propagate(steps=1)
-
-        for observer in self.observers:
-            observer.propagate(steps=1)
-
-        for truth in self.truths:
-            truth.propagate(steps=1)
-
-        # self.obs_model.update()
-        
-        reward = self.get_reward()
-        obs = self.get_observation()
-        info = self.get_info()
-        terminated = ((self.elapsed_steps == self.maxsteps))
-
-        self.available_actions = self.get_available_actions()
-        self.prev_action = np.array(action)
-
-        return obs, reward, terminated, False, info
     
     def reset(self, seed=None, options=None):
-        super().reset(seed=seed)
         self.elapsed_steps = 0
-
-        for kalman_object in self.kalman_objects:
-            kalman_object.reset()
 
         for observer in self.observers:
             observer.reset()
@@ -93,61 +25,21 @@ class SpaceEnv(Env):
         for truth in self.truths:
             truth.reset()
 
-        for state in self.obs_model.states:
-            state.reset()
-
-        self.prev_action = np.zeros(self.N)
-        self.available_actions = npm.repmat(np.arange(0, self.M+1), self.N, 1)
-        self.n_obs = 0
-
         obs = self.get_observation()
         info = self.get_info()
 
-
         return obs, info
     
-    def get_reward(self):
-        return reward1(self)
-    
     def get_observation(self):
-        obs =  self.obs_class.get_observation(self)
-        return obs
+        return None
     
     def get_info(self):
-        info = {}
-        
-        for i, kalman_object in enumerate(self.kalman_objects):
-            info[f"target{i+1}_cov"] = np.trace(kalman_object.P[:3, :3])
-        
-        for i, observer in enumerate(self.observers):
-            for j, truth in enumerate(self.truths):
-                info[f"target{j+1}_obs{i+1}_apmag"] = self.obs_model._compute(truth, observer)
-
-        info["prev_action"] = self.prev_action
-
-
-        return info
-    
-    def get_available_actions(self):
-        return self.obs_model.get_available_actions(self.truths, self.observers, self)
-    
-    def valid_action_mask(self):
-    
-        available_action = self.get_available_actions()
-        mask = np.ones_like(available_action, dtype=bool)
-
-        mask[np.where(available_action == -1)] = False
-
-        return mask
+        return None
     
 
-    def bare_step(self):
+    def step(self):
 
         self.elapsed_steps += 1
-
-
-        for state in self.obs_model.states:
-            state.propagate(steps=1)
 
         for observer in self.observers:
             observer.propagate(steps=1)
@@ -159,14 +51,35 @@ class SpaceEnv(Env):
 
         for i in range(self.observers.size):
             for j in range(self.truths.size):
-                H[i, j] = self.obs_model.get_obs_jacobian(self.truths[j], self.observers[i])
+                H[i, j] = self._get_obs_jacobian(self.truths[j], self.observers[i])
 
         
-        reward = self.get_reward()
+        reward = 0
         obs = self.get_observation()
         info = self.get_info()
         terminated = ((self.elapsed_steps == self.maxsteps))
 
         return obs, reward, terminated, False, info, H
+    
+    def _get_obs_jacobian(self, truth, observer):
+        truthx = truth.spl(truth.t - truth.tstep/2)
+        observerx = observer.spl(observer.t - observer.tstep/2)
+
+        rOT = truthx[:3] - observerx[:3]
+        vOT = truthx[3:] - observerx[3:]
+
+        norm_rOT = np.linalg.norm(rOT)
+
+        H11 = 1 / norm_rOT * np.eye(3) - np.outer(rOT, rOT) / norm_rOT**3
+        H22 = H11
+        H21 = - 1/norm_rOT**3 * np.outer(vOT, rOT) - 1/norm_rOT**3 * (np.outer(rOT, vOT) + np.dot(rOT, vOT)*np.eye(3)) + 3/ norm_rOT**5 * (np.dot(rOT, vOT)*np.outer(rOT, vOT))
+
+        return np.block([[H11, np.zeros(shape=(3,3))], [H21, H22]])
+    
+    def reset_new_agents(self, agents):
+        self.N = agents.size
+        self.observers = np.array( [Spline( tstep=self.tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
+        obs, info = self.reset()
+
 
 
