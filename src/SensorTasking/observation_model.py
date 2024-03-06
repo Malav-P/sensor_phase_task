@@ -11,6 +11,25 @@ class ObsModel(ABC):
     def make_measurement(truth, observers, verbose=False):
         pass
 
+    @abstractmethod
+    def is_visible(target, observer):
+        pass
+
+    def get_obs_jacobian(self, truth, observer):
+        truthx = truth.spl(truth.t - truth.tstep/2)
+        observerx = observer.spl(observer.t - observer.tstep/2)
+
+        rOT = truthx[:3] - observerx[:3]
+        vOT = truthx[3:] - observerx[3:]
+
+        norm_rOT = np.linalg.norm(rOT)
+
+        H11 = 1 / norm_rOT * np.eye(3) - np.outer(rOT, rOT) / norm_rOT**3
+        H22 = H11
+        H21 = - 1/norm_rOT**3 * np.outer(vOT, rOT) - 1/norm_rOT**3 * (np.outer(rOT, vOT) + np.dot(rOT, vOT)*np.eye(3)) + 3/ norm_rOT**5 * (np.dot(rOT, vOT)*np.outer(rOT, vOT))
+
+        return np.block([[H11, np.zeros(shape=(3,3))], [H21, H22]])
+
 class DummyModel(ObsModel):
     def __init__(self):
         super().__init__(states=[])
@@ -44,8 +63,24 @@ class DummyModel(ObsModel):
         if verbose:
             print(f"Observation Matrix : {Z}")
 
-
         return Z, R_invs
+    
+    def is_visible(self, target, observer):
+        return True
+    
+    def get_available_actions(self, truths, observers, env):
+        available_actions = np.full((observers.size, truths.size + 1), -1, dtype=int)
+
+        for j, observer in enumerate(observers):
+        
+            for i, truth in enumerate(truths):
+
+                if self.is_visible(truth, observer):
+                    available_actions[j, i+1] = i + 1
+
+        available_actions[:, 0] = 0  # comment to make action 0 unavailable
+
+        return available_actions
 
 
 

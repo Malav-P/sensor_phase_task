@@ -3,7 +3,7 @@ import numpy.matlib as npm
 from gymnasium import Env, spaces
 
 from .filter import KalmanFilter
-from .state import Dynamics
+from .state import Dynamics, Spline
 from .rewards import reward1, reward2
 
 class SpaceEnv(Env):
@@ -12,8 +12,10 @@ class SpaceEnv(Env):
         self.N = agents.size
 
         self.kalman_objects = np.array( [KalmanFilter(timestep=tstep, xof=targets[i]["state"], Pof=targets[i]["covariance"], func=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] ) 
-        self.observers = np.array( [Dynamics(x0=agents[i]["state"], tstep=tstep, f=agents[i]["f"], jac=agents[i]["jac"], f_params=agents[i]["f_params"], jac_params=agents[i]["jac_params"]) for i in range(self.N)] )
-        self.truths = np.array( [Dynamics(x0=targets[i]["state"], tstep=tstep, f=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] )
+        # self.observers = np.array( [Dynamics(x0=agents[i]["state"], tstep=tstep, f=agents[i]["f"], jac=agents[i]["jac"], f_params=agents[i]["f_params"], jac_params=agents[i]["jac_params"]) for i in range(self.N)] )
+        # self.truths = np.array( [Dynamics(x0=targets[i]["state"], tstep=tstep, f=targets[i]["f"], jac=targets[i]["jac"], f_params=targets[i]["f_params"], jac_params=targets[i]["jac_params"]) for i in range(self.M)] )
+        self.observers = np.array( [Spline( tstep=tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
+        self.truths = np.array( [Spline( tstep=tstep, spl=targets[i]["spline"], stm_spl = targets[i]["stm_spline"], period=targets[i]["period"]) for i in range(self.M)] )
 
         self.obs_class = obs_class
         self.obs_model = obs_model
@@ -137,5 +139,34 @@ class SpaceEnv(Env):
         mask[np.where(available_action == -1)] = False
 
         return mask
+    
+
+    def bare_step(self):
+
+        self.elapsed_steps += 1
+
+
+        for state in self.obs_model.states:
+            state.propagate(steps=1)
+
+        for observer in self.observers:
+            observer.propagate(steps=1)
+
+        for truth in self.truths:
+            truth.propagate(steps=1)
+
+        H = np.ndarray(shape = (self.observers.size, self.truths.size), dtype=object)
+
+        for i in range(self.observers.size):
+            for j in range(self.truths.size):
+                H[i, j] = self.obs_model.get_obs_jacobian(self.truths[j], self.observers[i])
+
+        
+        reward = self.get_reward()
+        obs = self.get_observation()
+        info = self.get_info()
+        terminated = ((self.elapsed_steps == self.maxsteps))
+
+        return obs, reward, terminated, False, info, H
 
 
