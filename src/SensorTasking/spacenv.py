@@ -72,7 +72,7 @@ class SpaceEnv:
 
         H11 = 1 / norm_rOT * np.eye(3) - np.outer(rOT, rOT) / norm_rOT**3
         H22 = H11
-        H21 = - 1/norm_rOT**3 * np.outer(vOT, rOT) - 1/norm_rOT**3 * (np.outer(rOT, vOT) + np.dot(rOT, vOT)*np.eye(3)) + 3/ norm_rOT**5 * (np.dot(rOT, vOT)*np.outer(rOT, vOT))
+        H21 = - 1/norm_rOT**3 * np.outer(vOT, rOT) - 1/norm_rOT**3 * (np.outer(rOT, vOT) + np.dot(rOT, vOT)*np.eye(3)) + 3/ norm_rOT**5 * (np.dot(rOT, vOT)*np.outer(rOT, rOT))
 
         return np.block([[H11, np.zeros(shape=(3,3))], [H21, H22]])
     

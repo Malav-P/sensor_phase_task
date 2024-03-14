@@ -2,6 +2,8 @@ import numpy as np
 import sys
 import gurobipy as gp
 from gurobipy import GRB
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import pygmo
 
 sys.path.append("../")
@@ -34,7 +36,8 @@ def compute_coefficients(env):
             stm = truth.eval_stm_spl( truth.t - truth.tstep / 2)
             stm_end = truth.eval_stm_spl(truth.period)
 
-            phi_j = np.linalg.inv(stm_end.reshape(6, 6)) @ stm.reshape(6, 6)
+            # Phi(t2, t1) Phi(t1, t0)  = Phi(t2, t0)      ===>       Phi(t2, t1) = Phi(t2, t0) * Phi(t1, t0)^-1    ===== > Phi(t1, t2) = Phi(t1, t0)^-1 * Phi(t2, t0)^-1
+            phi_j = stm.reshape(6, 6) @ np.linalg.inv(stm_end.reshape(6, 6))
 
 
             for i in range(env.observers.size):
@@ -46,6 +49,9 @@ def compute_coefficients(env):
 
 def solve_model(information):
     m = gp.Model("sensortask")
+
+    # Silence model output
+    m.Params.LogToConsole = 0
 
     # Create variables
     u = m.addMVar(shape=information.shape, vtype=GRB.BINARY, name="u")
@@ -69,13 +75,16 @@ class SSA_Problem():
         targets = tg.gen_phased_ics([1, 1], gen_P=True)
 
         self.ag = TargetGenerator(agent_ics, periods = agent_periods)
-        tmp_agents = self.ag.gen_phased_ics_from([0.0])
         self.num_agents = len(agent_periods)
+        tmp_agents = self.ag.gen_phased_ics_from([0.0] * self.num_agents)
+        
 
         self.maxsteps = 215
         self.tstep = 0.015
 
         self.env = SpaceEnv(tmp_agents, targets, self.maxsteps, self.tstep)
+
+        self.render_called = False
 
     def fitness(self, x):
 
@@ -93,4 +102,77 @@ class SSA_Problem():
         self.env.reset_new_agents(agents=agents)
 
         return
+    
+    def render(self, x):
+        self._gen_env(x)
+        information = compute_coefficients(self.env)
+        control, objective = solve_model(information)
+
+        if self.render_called:
+            plt.close(plt.get_fignums()[-1])
+        else:
+            self.render_called = True
+
+        fig, ax = plt.subplots()
+
+        truth_posns = np.zeros(shape=(self.env.truths.size, 2))
+        obs_posns = np.zeros(shape=(self.env.observers.size, 2))
+        
+        # plot observer orbits
+        for i, observer in enumerate(self.env.observers):
+            t = np.arange(0, observer.period, observer.tstep)
+            state_hist = observer.spl(t)
+            ax.plot(state_hist[:,0], state_hist[:, 1], linewidth='0.5', color = 'black')
+            obs_posns[i] = state_hist[0, :2]
+
+        
+        # plot target orbits 
+        for i, truth in enumerate(self.env.truths):
+            t = np.arange(0, truth.period, truth.tstep)
+            state_hist = truth.spl(t)
+            ax.plot(state_hist[:,0], state_hist[:, 1], linewidth='0.5', color = 'black')
+
+            truth_posns[i] = state_hist[0, :2]
+
+
+
+        truth_scat = ax.scatter(truth_posns[:,0], truth_posns[:,1], c="red")
+        obs_scat = ax.scatter(obs_posns[:,0], obs_posns[:,1], c="blue")
+
+        # connect the observer and target with a line
+        ctrls = np.where(control[0] == 1)[1]
+        lines = [None]*self.env.observers.size
+
+        
+        
+        for i, ctrl in enumerate(ctrls):
+            lines[i] = ax.plot([obs_posns[i,0], truth_posns[ctrl,0]], [obs_posns[i,1], truth_posns[ctrl,1]], linewidth = 0.2, linestyle = "--")
+
+        def update(frame):
+            # for each frame, update the data stored on each artist.
+            for i, truth in enumerate(self.env.truths):
+                state = truth.spl(frame*truth.tstep)
+                truth_posns[i] = state[:2]
+
+            # connect the observer and target with a line
+            ctrls = np.where(control[frame] == 1)[1]
+
+            for i, observer in enumerate(self.env.observers):
+                state = observer.spl(frame*observer.tstep)
+                obs_posns[i] = state[:2]
+                lines[i][0].set_xdata( [obs_posns[i,0], truth_posns[ctrls[i],0]] )
+                lines[i][0].set_ydata( [obs_posns[i,1], truth_posns[ctrls[i],1]] )
+
+            # update the scatter plots
+            truth_scat.set_offsets(truth_posns)
+            obs_scat.set_offsets(obs_posns)
+
+            return (truth_scat, obs_scat, *lines)
+
+
+        ani = animation.FuncAnimation(fig=fig, func=update, frames=self.env.maxsteps, interval=30)
+
+        return ani
+    
+    ## TODO : (1) generate pygmo problem using this class and (2) solve the problem via GA
 

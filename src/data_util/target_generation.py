@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.interpolate import make_interp_spline
 
-from .cr3bp import cr3bp, jac_cr3bp, build_taylor_cr3bp
+from .cr3bp import build_taylor_cr3bp
 
 
 class TargetGenerator:
@@ -11,14 +11,13 @@ class TargetGenerator:
         self.num_options = self.catalog.shape[0]
         self.dim = self.catalog.shape[1]
         self.mu = (1.215058560962404e-02,)
+        self.LU = 384400
+        self.TU = 3.751902619517228e+05
     
         self.r, _, _ = build_taylor_cr3bp(self.mu[0], stm=True)
 
 
     def gen_phased_ics(self, num_targets,  gen_P = True):
-
-        LU = 384400
-        TU = 3.751902619517228e+05
 
         if isinstance(num_targets, list):
             num_targets = np.array(num_targets)
@@ -26,9 +25,9 @@ class TargetGenerator:
             num_targets = num_targets * np.ones(self.num_options, dtype=int)
         
         if gen_P:
-            target_P_0 = np.block([[((500 / LU)**2) * np.eye(3), np.zeros(shape=(3,3))], [np.zeros(shape=(3,3)), ((0.001 * TU/LU)**2) * np.eye(3)]]) # 500 km uncertainty in position and 0.001 km/s uncertainty in velocity
+            target_P0 = np.block([[((500 / self.LU)**2) * np.eye(3), np.zeros(shape=(3,3))], [np.zeros(shape=(3,3)), ((0.001 * self.TU/self.LU)**2) * np.eye(3)]]) # 500 km uncertainty in position and 0.001 km/s uncertainty in velocity
         else:
-            target_P_0 = None
+            target_P0 = None
 
         assert num_targets.size <= self.num_options, "length of num_targets must be <= number of catalog objects"
 
@@ -50,13 +49,9 @@ class TargetGenerator:
             
             targets.append({
             "state" : target_x,
-            "covariance" : target_P_0,
+            "covariance" : target_P0,
             "period" : T,
             "phase" : 0.0,
-            "f": cr3bp,
-            "jac" : jac_cr3bp,
-            "f_params": self.mu,
-            "jac_params" : self.mu,
             "spline" : spl,
             "stm_spline": stm_spl})
 
@@ -69,13 +64,9 @@ class TargetGenerator:
                 state_hist, stm_hist = self.gen_state_history(i, 500, phase = shift * j / T)
                 target = {
                     "state" : state_hist[0, 1:],
-                    "covariance" : target_P_0,
+                    "covariance" : target_P0,
                     "period" : T,
                     "phase" : shift * j / T,
-                    "f": cr3bp,
-                    "jac" : jac_cr3bp,
-                    "f_params": self.mu,
-                    "jac_params" : self.mu,
                     "spline": self.make_spline(state_hist, periodic=True),
                     "stm_spline": self.make_spline(stm_hist, periodic=False)}
                                 
@@ -102,10 +93,6 @@ class TargetGenerator:
                 "covariance" : None,
                 "period" : T,
                 "phase" : phase,
-                "f": cr3bp,
-                "jac" : jac_cr3bp,
-                "f_params": self.mu,
-                "jac_params" : self.mu,
                 "spline" : spl,
                 "stm_spline": stm_spl})
 
@@ -156,10 +143,10 @@ class TargetGenerator:
 
     #     return data
     
-    # def normalize_data(self, data, LU = 1.0, TU = 1.0, center = np.array([0, 0, 0])):
+    # def normalize_data(self, data, self.LU = 1.0, self.TU = 1.0, center = np.array([0, 0, 0])):
     #     norm_data = np.copy(data)
-    #     norm_data[:, 0] = (data[:,0] - data[0, 0]) / TU
-    #     norm_data[:, [1, 2, 3]] = data[:, [1, 2, 3]] / LU + np.tile(center, (data.shape[0], 1))
+    #     norm_data[:, 0] = (data[:,0] - data[0, 0]) / self.TU
+    #     norm_data[:, [1, 2, 3]] = data[:, [1, 2, 3]] / self.LU + np.tile(center, (data.shape[0], 1))
     
 
     #     return norm_data
