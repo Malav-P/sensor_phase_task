@@ -16,6 +16,11 @@ class TargetGenerator:
     
         self.r, _, _ = build_taylor_cr3bp(self.mu[0], stm=True)
 
+    def add_to_catalog(self, ic, period) -> None:
+        self.catalog = np.vstack((self.catalog, ic))
+        self.periods = np.append(self.periods, period)
+        self.num_options = self.catalog.shape[0]
+
 
     def gen_phased_ics(self, num_targets,  gen_P = True):
 
@@ -76,27 +81,27 @@ class TargetGenerator:
     
     def gen_phased_ics_from(self, x):
 
-            targets = []
+        targets = []
 
-            for i, phase in enumerate(x):
+        for i, phase in enumerate(x):
 
-                T = self.periods[i]
+            T = self.periods[i]
 
-                target_x = self.catalog[i, :]
+            target_x = self.catalog[i, :]
 
-                state_hist, stm_hist = self.gen_state_history(i, 500, phase=phase)
-                spl = self.make_spline(state_hist, periodic=True)
-                stm_spl = self.make_spline(stm_hist, periodic=False)
-                
-                targets.append({
-                "state" : target_x,
-                "covariance" : None,
-                "period" : T,
-                "phase" : phase,
-                "spline" : spl,
-                "stm_spline": stm_spl})
+            state_hist, stm_hist = self.gen_state_history(i, 500, phase=phase)
+            spl = self.make_spline(state_hist, periodic=True)
+            stm_spl = self.make_spline(stm_hist, periodic=False)
+            
+            targets.append({
+            "state" : target_x,
+            "covariance" : None,
+            "period" : T,
+            "phase" : phase,
+            "spline" : spl,
+            "stm_spline": stm_spl})
 
-            return np.array(targets)
+        return np.array(targets)
     
     def gen_state_history(self, catalog_ID, n_points, phase = 0):
 
@@ -123,37 +128,11 @@ class TargetGenerator:
         stm_history[:, 1:] = out[-1][:, self.dim:]
 
         return state_history, stm_history
-    
-    # def gen_stm_history(self, catalog_ID, n_points):
 
-    #     tt = np.linspace(0, self.periods[catalog_ID], n_points)
-    #     data = np.zeros(shape=(n_points, 1 + self.dim*self.dim))
-
-    #     ic = np.hstack((self.catalog[catalog_ID], np.eye(self.dim).flatten()))
-
-    #     data[:, 0] = tt
-    #     data[0, 1:] = ic[self.dim:]
-
-    #     self.r.time = 0
-    #     self.r.state[:] = ic
-
-    #     out = self.r.propagate_grid(tt)
-
-    #     data[:, 1:] = out[-1][:, self.dim:]
-
-    #     return data
-    
-    # def normalize_data(self, data, self.LU = 1.0, self.TU = 1.0, center = np.array([0, 0, 0])):
-    #     norm_data = np.copy(data)
-    #     norm_data[:, 0] = (data[:,0] - data[0, 0]) / self.TU
-    #     norm_data[:, [1, 2, 3]] = data[:, [1, 2, 3]] / self.LU + np.tile(center, (data.shape[0], 1))
-    
-
-    #     return norm_data
     
     def make_spline(self, data, periodic):
         if periodic:
-            x = np.append(data[:,0], data[-1, 0] + data[1,0])
+            x = np.append(data[:,0], data[-1, 0] + data[1,0])  # append another timestep to time grid
             y = np.append(data[:, 1:], [data[0, 1:]], axis=0)
 
             bspl = make_interp_spline(x, y, k=3, bc_type='periodic', axis=0)

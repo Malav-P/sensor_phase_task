@@ -81,5 +81,7 @@ class SpaceEnv:
         self.observers = np.array( [Spline( tstep=self.tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
         obs, info = self.reset()
 
+        return
+
 
 

@@ -2,9 +2,9 @@ import numpy as np
 import sys
 import gurobipy as gp
 from gurobipy import GRB
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+
 import pygmo
+from typing import Optional
 
 sys.path.append("../")
 
@@ -16,7 +16,7 @@ def compute_coefficients(env):
 
     obs, info = env.reset()
     terminated = False
-
+    
     dt = 0.1*env.observers[0].tstep
 
     sigma =  3 * np.pi / 180
@@ -69,6 +69,9 @@ def solve_model(information):
 
 
 
+
+
+
 class SSA_Problem():
     def __init__(self, target_ics, target_periods,  agent_ics, agent_periods) -> None:
         tg = TargetGenerator(target_ics, periods=target_periods)
@@ -78,13 +81,20 @@ class SSA_Problem():
         self.num_agents = len(agent_periods)
         tmp_agents = self.ag.gen_phased_ics_from([0.0] * self.num_agents)
         
-
-        self.maxsteps = 215
         self.tstep = 0.015
+        self.period = np.min([np.min(agent_periods), np.min(target_periods)])
+        self.maxsteps = int(np.floor(self.period/self.tstep))
 
         self.env = SpaceEnv(tmp_agents, targets, self.maxsteps, self.tstep)
 
-        self.render_called = False
+    def add_agent(self, agent_ic, agent_period):
+        self.ag.add_to_catalog(agent_ic, agent_period)
+        self.num_agents = self.ag.num_options
+
+        self.period = np.min([self.period, agent_period])
+        self.maxsteps = int(np.floor(self.period/self.tstep))
+
+        self._gen_env(x=[0.0]*self.num_agents)
 
     def fitness(self, x):
 
@@ -92,7 +102,36 @@ class SSA_Problem():
         information = compute_coefficients(self.env)
         control, objective = solve_model(information)
 
-        return objective
+        return [-objective]
+    
+    def myopic_fitness(self, x):
+        self._gen_env(x)
+        information = compute_coefficients(self.env)
+
+        self.env.reset()
+
+        u = np.zeros_like(information, dtype=int)
+
+        dists = np.zeros_like(information)
+
+        for k in range(u.shape[0]):
+            
+            for i, observer in enumerate(self.env.observers):
+                j = self._closest_target(observer)
+                u[k, i, j] = 1
+                dists[k, i, :] = np.array([np.linalg.norm(observer.x[:3] - target.x[:3]) for target in self.env.truths])
+                # print(self.env.observers[0].x[:3], self.env.truths[0].x[:3])  Used for debugging, can delete
+
+            out = self.env.step()
+        
+    
+        return [-u.reshape(-1) @ information.reshape(-1)], u, dists
+
+    def _closest_target(self, observer):
+
+        dists = np.array([np.linalg.norm(observer.x[:3] - target.x[:3]) for target in self.env.truths])
+        return np.argmin(dists)
+
     
     def get_bounds(self):
         return ([0] * self.num_agents, [1] * self.num_agents)
@@ -103,76 +142,23 @@ class SSA_Problem():
 
         return
     
-    def render(self, x):
-        self._gen_env(x)
-        information = compute_coefficients(self.env)
-        control, objective = solve_model(information)
-
-        if self.render_called:
-            plt.close(plt.get_fignums()[-1])
-        else:
-            self.render_called = True
-
-        fig, ax = plt.subplots()
-
-        truth_posns = np.zeros(shape=(self.env.truths.size, 2))
-        obs_posns = np.zeros(shape=(self.env.observers.size, 2))
-        
-        # plot observer orbits
-        for i, observer in enumerate(self.env.observers):
-            t = np.arange(0, observer.period, observer.tstep)
-            state_hist = observer.spl(t)
-            ax.plot(state_hist[:,0], state_hist[:, 1], linewidth='0.5', color = 'black')
-            obs_posns[i] = state_hist[0, :2]
-
-        
-        # plot target orbits 
-        for i, truth in enumerate(self.env.truths):
-            t = np.arange(0, truth.period, truth.tstep)
-            state_hist = truth.spl(t)
-            ax.plot(state_hist[:,0], state_hist[:, 1], linewidth='0.5', color = 'black')
-
-            truth_posns[i] = state_hist[0, :2]
-
-
-
-        truth_scat = ax.scatter(truth_posns[:,0], truth_posns[:,1], c="red")
-        obs_scat = ax.scatter(obs_posns[:,0], obs_posns[:,1], c="blue")
-
-        # connect the observer and target with a line
-        ctrls = np.where(control[0] == 1)[1]
-        lines = [None]*self.env.observers.size
-
-        
-        
-        for i, ctrl in enumerate(ctrls):
-            lines[i] = ax.plot([obs_posns[i,0], truth_posns[ctrl,0]], [obs_posns[i,1], truth_posns[ctrl,1]], linewidth = 0.2, linestyle = "--")
-
-        def update(frame):
-            # for each frame, update the data stored on each artist.
-            for i, truth in enumerate(self.env.truths):
-                state = truth.spl(frame*truth.tstep)
-                truth_posns[i] = state[:2]
-
-            # connect the observer and target with a line
-            ctrls = np.where(control[frame] == 1)[1]
-
-            for i, observer in enumerate(self.env.observers):
-                state = observer.spl(frame*observer.tstep)
-                obs_posns[i] = state[:2]
-                lines[i][0].set_xdata( [obs_posns[i,0], truth_posns[ctrls[i],0]] )
-                lines[i][0].set_ydata( [obs_posns[i,1], truth_posns[ctrls[i],1]] )
-
-            # update the scatter plots
-            truth_scat.set_offsets(truth_posns)
-            obs_scat.set_offsets(obs_posns)
-
-            return (truth_scat, obs_scat, *lines)
-
-
-        ani = animation.FuncAnimation(fig=fig, func=update, frames=self.env.maxsteps, interval=30)
-
-        return ani
+ 
     
     ## TODO : (1) generate pygmo problem using this class and (2) solve the problem via GA
 
+
+class Greedy_SSA_Problem(SSA_Problem):
+    def __init__(self, target_ics, target_periods,  agent_ics , agent_periods ) -> None:
+        super().__init__(target_ics=target_ics, target_periods=target_periods, agent_ics=agent_ics, agent_periods=agent_periods)
+
+        self.opt_phases = np.array([])
+
+    def fitness(self, x):
+
+        phase = np.hstack((self.opt_phases, x))
+
+        return super().fitness(phase)
+
+    def get_bounds(self):
+        return ([0], [1])
+        
