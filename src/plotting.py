@@ -3,7 +3,8 @@ import matplotlib.animation as animation
 import numpy as np
 from typing import Optional
 
-from SensorTasking.compute_coefficients import SSA_Problem, compute_coefficients, solve_model
+from SensorTasking.ssa_problem import SSA_Problem
+from SensorTasking.compute_coefficients import compute_coefficients, solve_model
 
 def render(p: SSA_Problem, x: np.ndarray[float], fig: int, control: Optional[np.ndarray[int]]= None):
     """

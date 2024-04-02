@@ -2,7 +2,37 @@ import numpy as np
 from .state import Spline
 
 class SpaceEnv:
-    def __init__(self, agents, targets, maxsteps, tstep):
+    """
+    Represents the space environment with agents and targets.
+
+    Attributes:
+        M (int): Number of targets.
+        N (int): Number of agents.
+        maxsteps (int): Maximum number of steps.
+        tstep (float): Time step.
+        elapsed_steps (int): Number of steps elapsed.
+        observers (np.ndarray): Array of observers.
+        truths (np.ndarray): Array of truths/targets.
+
+    Methods:
+        __init__(agents, targets, maxsteps, tstep): Initializes the SpaceEnv with agents, targets, maximum steps, and time step.
+        reset(): Resets the environment to its initial state.
+        step(): Advances the environment by one step and returns termination status and observation Jacobians.
+        _get_obs_jacobian(truth, observer): Computes the observation Jacobian between a truth and an observer.
+        reset_new_agents(agents): Adds agents to environment and resets the environment.
+
+    """
+    def __init__(self, agents:np.ndarray[dict], targets: np.ndarray[dict], maxsteps: int, tstep: float):
+        """
+        Initializes the SpaceEnv with agents, targets, maximum steps, and time step.
+
+        Parameters:
+            agents (np.ndarray): Array containing information about agents.
+            targets (np.ndarray): Array containing information about targets.
+            maxsteps (int): Maximum number of steps.
+            tstep (float): Time step.
+
+        """
         self.M  = targets.size
         self.N = agents.size
 
@@ -13,10 +43,14 @@ class SpaceEnv:
         self.observers = np.array( [Spline( tstep=tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
         self.truths = np.array( [Spline( tstep=tstep, spl=targets[i]["spline"], stm_spl = targets[i]["stm_spline"], period=targets[i]["period"]) for i in range(self.M)] )
 
+    def reset(self):
+        """
+        Resets the environment to its initial state.
 
+        Returns:
+            None
 
-    
-    def reset(self, seed=None, options=None):
+        """
         self.elapsed_steps = 0
 
         for observer in self.observers:
@@ -25,19 +59,16 @@ class SpaceEnv:
         for truth in self.truths:
             truth.reset()
 
-        obs = self.get_observation()
-        info = self.get_info()
-
-        return obs, info
+        return
     
-    def get_observation(self):
-        return None
-    
-    def get_info(self):
-        return None
-    
-
     def step(self):
+        """
+        Advances the environment by one step and returns termination status and observation Jacobians.
+
+        Returns:
+            Tuple[bool, np.ndarray]: A tuple containing termination status and observation Jacobians.
+
+        """
 
         self.elapsed_steps += 1
 
@@ -54,14 +85,22 @@ class SpaceEnv:
                 H[i, j] = self._get_obs_jacobian(self.truths[j], self.observers[i])
 
         
-        reward = 0
-        obs = self.get_observation()
-        info = self.get_info()
         terminated = ((self.elapsed_steps == self.maxsteps))
 
-        return obs, reward, terminated, False, info, H
+        return  terminated, H
     
-    def _get_obs_jacobian(self, truth, observer):
+    def _get_obs_jacobian(self, truth: Spline, observer: Spline):
+        """
+        Computes the observation Jacobian between a truth and an observer.
+
+        Parameters:
+            truth (Spline): Spline object representing the truth.
+            observer (Spline): Spline object representing the observer.
+
+        Returns:
+            np.ndarray: Observation Jacobian matrix.
+
+        """
         truthx = truth.spl(truth.t - truth.tstep/2)
         observerx = observer.spl(observer.t - observer.tstep/2)
 
@@ -76,10 +115,20 @@ class SpaceEnv:
 
         return np.block([[H11, np.zeros(shape=(3,3))], [H21, H22]])
     
-    def reset_new_agents(self, agents):
-        self.N = agents.size
-        self.observers = np.array( [Spline( tstep=self.tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
-        obs, info = self.reset()
+    def reset_new_agents(self, agents_info: np.ndarray[dict]):
+        """
+        Resets the environment with new agents.
+
+        Parameters:
+            agents_info (np.ndarray): Array containing information about new agents.
+
+        Returns:
+            None
+
+        """
+        self.N = agents_info.size
+        self.observers = np.array( [Spline( tstep=self.tstep, spl=agents_info[i]["spline"], stm_spl = agents_info[i]["stm_spline"], period=agents_info[i]["period"]) for i in range(self.N)] )
+        self.reset()
 
         return
 

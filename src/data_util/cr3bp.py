@@ -2,6 +2,24 @@ import numpy as np
 import heyoka as hy
 
 def cr3bp(t, s, mu):
+    """
+    Computes the derivatives of the state vector for the Circular Restricted Three-Body Problem (CR3BP).
+
+    Parameters:
+        t (float): Time parameter (not used in this function).
+        s (np.ndarray[float]): State vector [x, y, z, vx, vy, vz].
+        mu (float): Mass ratio of the CR3BP system.
+
+    Returns:
+        np.ndarray[float]: Derivatives of the state vector.
+
+    Notes:
+        - The CR3BP models motion in a rotating coordinate system where two primary bodies (e.g., Earth and Moon) 
+          move in circular orbits around their center of mass while a third, negligible mass moves under 
+          their gravitational influence.
+        - The function computes the derivatives of the state vector with respect to time.
+
+    """
     x, y, z, vx, vy, vz = s
 
     ds = np.array([vx, vy, vz, 0, 0, 0])
@@ -16,6 +34,25 @@ def cr3bp(t, s, mu):
     return ds
 
 def jac_cr3bp(t, s, mu):
+    """
+    Computes the Jacobian matrix of the Circular Restricted Three-Body Problem (CR3BP) dynamics.
+
+    Parameters:
+        t (float): Time parameter (not used in this function).
+        s (np.ndarray[float]): State vector [x, y, z, vx, vy, vz].
+        mu (float): Mass ratio of the CR3BP system.
+
+    Returns:
+        np.ndarray[float]: Jacobian matrix.
+
+    Notes:
+        - The CR3BP models motion in a rotating coordinate system where two primary bodies (e.g., Earth and Moon) 
+          move in circular orbits around their center of mass while a third, negligible mass moves under 
+          their gravitational influence.
+        - The Jacobian matrix represents the linearization of the system dynamics around the given state.
+        - The function computes the Jacobian matrix A, where A = [[0, I], [U, 2*omega]], with I being the identity matrix and
+          U being the gravitational potential matrix.
+    """
     x, y, z, vx, vy, vz = s
 
     r1 = np.sqrt((x+mu)**2 + y**2 + z**2)
