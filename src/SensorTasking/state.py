@@ -60,6 +60,14 @@ class Dynamics(State):
     """
     Represents a dynamical state in the system.
 
+    Parameters:
+        x0 (np.ndarray[float]): Initial condition.
+        tstep (float): Time step size.
+        f (Callable): Function defining the dynamics.
+        jac (Optional[Callable]): Jacobian of the dynamics (optional).
+        f_params (Optional[tuple[float]]): Additional parameters for the dynamics function (optional).
+        jac_params (Optional[tuple[float]]): Additional parameters for the Jacobian function (optional).
+
     Attributes:
         r: ODE integrator.
 
@@ -72,22 +80,12 @@ class Dynamics(State):
     """
     def __init__(self,
                 x0: np.ndarray[float],
-                tstep: float, f: Callable,
+                tstep: float,
+                f: Callable[[np.ndarray], np.ndarray],
                 jac: Optional[Callable] = None,
                 f_params: Optional[tuple[float]] = None,
                 jac_params: Optional[tuple[float]] = None):
-        """
-        Initializes the Dynamics state.
 
-        Parameters:
-            x0: Initial condition.
-            tstep: Time step size.
-            f: Function defining the dynamics.
-            jac: Jacobian of the dynamics (optional).
-            f_params: Additional parameters for the dynamics function (optional).
-            jac_params: Additional parameters for the Jacobian function (optional).
-
-        """
         super().__init__(x0=x0, tstep=tstep)
         self.r = ode(f, jac).set_integrator('dop853')
         
@@ -141,6 +139,12 @@ class Spline(State):
     """
     Represents a state defined by a spline.
 
+    Parameters:
+        tstep (float): Time step size.
+        spl (BSpline): Spline function.
+        stm_spl (BSpline): Spline function for state transition matrix.
+        period (float): Period of the spline.
+
     Attributes:
         period (float): Period of the spline.
         spl (BSpline): Spline function.
@@ -154,16 +158,6 @@ class Spline(State):
 
     """
     def __init__(self, tstep: float, spl: BSpline, stm_spl: BSpline, period: float):
-        """
-        Initializes the Spline state.
-
-        Parameters:
-            tstep (float): Time step size.
-            spl (BSpline): Spline function.
-            stm_spl (BSpline): Spline function for state transition matrix.
-            period (float): Period of the spline.
-
-        """
 
         self.period = period
         self.spl = spl
@@ -223,6 +217,14 @@ class Analytic(State):
     """
     Represents a state with analytic functions to propagate the state.
 
+    Parameters:
+        x0 (np.ndarray[float]): The initial state vector.
+        tstep (float): The time step for propagation.
+        functions (List[Callable[[float], float]]): List of analytic functions representing state evolution.
+
+    Raises:
+        ValueError: If the number of variables and functions mismatch.
+
     Attributes:
         functions (List[Callable[[float]]): List of analytic functions representing state evolution.
 
@@ -231,22 +233,16 @@ class Analytic(State):
         reset(): Resets the state to its initial configuration.
 
     """
-    def __init__(self, x0: np.ndarray[float], tstep: float, functions: List[Callable[[float], float]]):
-        """
-        Initializes the Analytic state.
-
-        Parameters:
-            x0 (np.ndarray[float]): The initial state vector.
-            tstep (float): The time step for propagation.
-            functions (List[Callable[[float], float]]): List of analytic functions representing state evolution.
-
-        Raises:
-            AssertionError: If the number of variables and functions mismatch.
-        """
+    def __init__(self,
+                x0: np.ndarray[float],
+                tstep: float,
+                functions: List[Callable[[float], float]]):
+        
         super().__init__(x0, tstep)
         self.functions = functions
 
-        assert x0.size == functions.size, "number of variables and functions mismatch"
+        if x0.size != functions.size:
+            raise ValueError("Number of variables and functions mismatch.")
 
     def propagate(self, steps: Optional[int] = 1):
         """
@@ -270,4 +266,3 @@ class Analytic(State):
         """
         self.x = self.ic
         self.t = 0
-    
