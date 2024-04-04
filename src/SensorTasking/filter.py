@@ -61,7 +61,8 @@ class KalmanFilter:
         
         self.P = (self.P + self.P.T)/2 # ensure posterior covariance symmetric
 
-        assert np.allclose(self.P, self.P.T, rtol=1e-5, atol=1e-8)
+        if not np.allclose(self.P, self.P.T, rtol=1e-5, atol=1e-8):
+            raise FloatingPointError("Covariance matrix is not symmetric.")
 
     
     def _forecast(self, steps):
@@ -74,9 +75,8 @@ class KalmanFilter:
 
         self.P = 0.5 * (self.P + self.P.T) # ensure symmetric covariance.
 
-        assert np.allclose(self.P, self.P.T, rtol=1e-5, atol=1e-8)
-
-        return
+        if not np.allclose(self.P, self.P.T, rtol=1e-5, atol=1e-8):
+            raise FloatingPointError("Covariance matrix is not symmetric.")
     
     def reset(self):
         self.x = self.ic
