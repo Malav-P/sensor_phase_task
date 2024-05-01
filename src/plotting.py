@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D 
 import matplotlib.animation as animation
 import numpy as np
 from typing import Optional
@@ -133,4 +134,81 @@ def visualize_info_vs_phase(p: SSA_Problem, phases: np.ndarray[float], observer:
 
     plt.draw_if_interactive()
     
+    return
+
+def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
+    """
+    Visualize the orbits of agents and observers. Usually this is used to determine if orbits are intersecting.
+
+    Parameters:
+        p (SSA_Problem): The instance of the SSA problem.
+        fig (int): The fig number to plot on.
+        projection (str): The type of projection to plot. Can be one of "3d", "xy", "xz" or "yz"
+
+    """
+
+    plt.close(fig)
+    plt.figure(fig)
+
+    if projection == "3d":
+        # ax = plt.gcf().add_axes((0, 0, 1, 1), projection = "3d")
+        ax = plt.gcf().add_subplot(projection="3d")
+
+        ax.set_xlabel("x (DU)")
+        ax.set_ylabel("y (DU)")
+        ax.set_zlabel("z (DU)")
+        ax.set_title("Agent/Target Orbits")
+
+
+        for catalog_ID in range(p.tg.num_options):
+            state_hist, _ = p.tg.gen_state_history(catalog_ID=catalog_ID, n_points=500)
+            x = state_hist[:,1]
+            y = state_hist[:,2]
+            z = state_hist[:,3]
+            ax.plot3D(x, y, z, color="black", linewidth=0.5)
+
+        for catalog_ID in range(p.ag.num_options):
+            state_hist, _ = p.ag.gen_state_history(catalog_ID=catalog_ID, n_points=500)
+            x = state_hist[:,1]
+            y = state_hist[:,2]
+            z = state_hist[:,3]
+            ax.plot3D(x, y, z, color="red", linewidth=0.5)
+
+    else:
+
+        match projection:
+            case "xy":
+                xlabel = "x"
+                ylabel = "y"
+                idx1 = 1
+                idx2 = 2
+            case "xz":
+                xlabel = "x"
+                ylabel = "z"
+                idx1 = 1
+                idx2 = 3
+            case "yz":
+                xlabel = "y"
+                ylabel = "z"
+                idx1 = 2
+                idx2 = 3
+
+        for catalog_ID in range(p.tg.num_options):
+            state_hist, _ = p.tg.gen_state_history(catalog_ID=catalog_ID, n_points=500)
+            x = state_hist[:,idx1]
+            y = state_hist[:,idx2]
+            plt.plot(x, y, color="black", linewidth=0.5)
+
+        for catalog_ID in range(p.ag.num_options):
+            state_hist, _ = p.ag.gen_state_history(catalog_ID=catalog_ID, n_points=500)
+            x = state_hist[:,idx1]
+            y = state_hist[:,idx2]
+            plt.plot(x, y, color="red", linewidth=0.5)
+
+        plt.xlabel(f"{xlabel} (DU)")
+        plt.ylabel(f"{ylabel} (DU)")
+        plt.title("Agent/Target Orbits")
+
+    plt.draw_if_interactive()
+
     return

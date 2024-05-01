@@ -1,7 +1,6 @@
 import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
-from typing import Optional
 
 from .spacenv import SpaceEnv
 
@@ -42,7 +41,7 @@ def compute_coefficients(env: SpaceEnv):
             stm = truth.eval_stm_spl( truth.t - truth.tstep / 2)
             stm_end = truth.eval_stm_spl(truth.period)
 
-            # Phi(t2, t1) Phi(t1, t0)  = Phi(t2, t0)      ===>       Phi(t2, t1) = Phi(t2, t0) * Phi(t1, t0)^-1    ===== > Phi(t1, t2) = Phi(t1, t0)^-1 * Phi(t2, t0)^-1
+            # Phi(t2, t1) Phi(t1, t0)  = Phi(t2, t0)      ===>       Phi(t2, t1) = Phi(t2, t0) * Phi(t1, t0)^-1    ===== > Phi(t1, t2) = Phi(t1, t0) * Phi(t2, t0)^-1
             phi_j = stm.reshape(6, 6) @ np.linalg.inv(stm_end.reshape(6, 6))
 
             for i in range(env.observers.size):

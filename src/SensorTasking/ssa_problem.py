@@ -19,11 +19,13 @@ class SSA_Problem():
     
     Attributes:
         ag (TargetGenerator): A generator/propagator for agent initial conditions.
+        tg (TargetGenerator): A generator/propagator for target intial conditions.
         num_agents (int): Number of agents.
         tstep (float): Timestep for numerical propagation.
         period (float): Shortest period of amongst all targets and observers. This is the simulation time.
         maxsteps (int) : Maximum number of timesteps for simulation.
         env (SpaceEnv): Space environment object where targets and observers are propagated.
+        min_target_period (ndarray): minimum period amongst all target orbits. Excludes agent orbits!
     
     Methods:
         fitness(x): This method evaluates the fitness of a decision vector 'x'.
@@ -34,8 +36,8 @@ class SSA_Problem():
         _gen_env(x): Updates the environment given the decision vector and resets environment to initial state.
     """
     def __init__(self, target_ics: list, target_periods:list,  agent_ics:list, agent_periods:list) -> None:
-        tg = TargetGenerator(target_ics, periods=target_periods)
-        targets = np.array([tg.gen_phased_ics(catalog_ID=i, num_targets=1, gen_P=False)[0] for i in range(tg.num_options)])
+        self.tg = TargetGenerator(target_ics, periods=target_periods)
+        targets = np.array([self.tg.gen_phased_ics(catalog_ID=i, num_targets=1, gen_P=False)[0] for i in range(self.tg.num_options)])
 
         self.ag = TargetGenerator(agent_ics, periods = agent_periods)
         self.num_agents = len(agent_periods)
@@ -48,6 +50,26 @@ class SSA_Problem():
         self.maxsteps = int(np.floor(self.period/self.tstep))
 
         self.env = SpaceEnv(tmp_agents, targets, self.maxsteps, self.tstep)
+        self.min_target_period = np.min(target_periods)
+
+    def remove_agent(self, index:int = 0):
+        """
+        Removes the agent at the specified index in the list of agents and resets the Space Environment to initial state.
+
+        Parameters:
+            index (int): index of agent to remove
+        """
+
+        self.ag.remove_from_catalog(index)
+        self.num_agents = self.ag.num_options
+
+        if self.ag.periods.size == 0:
+            self.period = self.min_target_period
+        else:
+            self.period = np.min([np.min(self.ag.periods), self.min_target_period])
+
+        self.maxsteps = int(np.floor(self.period/self.tstep))
+        self._gen_env(x=[0.0]*self.num_agents)
 
     def add_agent(self, agent_ic: np.ndarray[float], agent_period: float):
         """
@@ -60,7 +82,7 @@ class SSA_Problem():
         self.ag.add_to_catalog(agent_ic, agent_period)
         self.num_agents = self.ag.num_options
 
-        self.period = np.min([self.period, agent_period])
+        self.period = np.min([agent_period, self.period])
         self.maxsteps = int(np.floor(self.period/self.tstep))
 
         self._gen_env(x=[0.0]*self.num_agents)
@@ -150,6 +172,8 @@ class SSA_Problem():
         self.env.reset_new_agents(agents_info=agents_info)
 
 
+
+
 class Greedy_SSA_Problem(SSA_Problem):
     """
     This class represents the SSA_Problem suited for greedy optimization using pygmo.
@@ -164,7 +188,7 @@ class Greedy_SSA_Problem(SSA_Problem):
         opt_phases (numpy.ndarray): An array containing the optimal phases found so far.
     
     Methods:
-        fitness(self, x): This method evaluates the fitness of a given solution 'x'. It concatenates the current optimal phases with 'x' to form a new phase, and then calls the fitness method of the parent class SSA_Problem to evaluate it.
+        fitness(self, x): This method evaluates the fitness of a given solution 'x'.
         get_bounds(self): This method returns the bounds of the optimization problem. The bounds are [0, 1].
     """
     def __init__(self, target_ics, target_periods,  agent_ics , agent_periods ) -> None:
@@ -183,9 +207,9 @@ class Greedy_SSA_Problem(SSA_Problem):
             list: The fitness of the design variable 'x'.
         """
 
-        phase = np.hstack((self.opt_phases, x))
+        # phase = np.hstack((self.opt_phases, x))
 
-        return super().fitness(phase)
+        return super().fitness(x)
 
     def get_bounds(self):
         """

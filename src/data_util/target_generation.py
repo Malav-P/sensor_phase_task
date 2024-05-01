@@ -51,6 +51,20 @@ class TargetGenerator:
     
         self.r, _, _ = build_taylor_cr3bp(self.mu[0], stm=True)
 
+    def remove_from_catalog(self, catalogID:int):
+        """
+        Removes a target from the catalog
+
+        Parameters:
+            catalogID (int): catalogID of the target to remove
+
+        Returns: 
+            None
+        """
+        self.catalog = np.delete(self.catalog, catalogID, 0)
+        self.periods = np.delete(self.periods, catalogID)
+        self.num_options = self.catalog.shape[0]
+
     def add_to_catalog(self, ic: np.ndarray[float], period: float) -> None:
         """
         Adds a new target to the catalog.
