@@ -2,12 +2,17 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D 
 import matplotlib.animation as animation
 import numpy as np
+from copy import copy
 from typing import Optional
+import warnings
 
 from SensorTasking.ssa_problem import SSA_Problem
-from SensorTasking.compute_coefficients import compute_coefficients, solve_model
+from SensorTasking.compute_coefficients import compute_coefficients
 
-def render(p: SSA_Problem, x: np.ndarray[float], fig: int, control: Optional[np.ndarray[int]]= None):
+def render(p: SSA_Problem,
+           x: np.ndarray[float],
+           fig: int,
+           control: Optional[np.ndarray[int]]= None):
     """
     Renders the simulation animation for the given SSA problem and agent phases.
 
@@ -34,9 +39,13 @@ def render(p: SSA_Problem, x: np.ndarray[float], fig: int, control: Optional[np.
     if control is None:
         p._gen_env(x)
         information = compute_coefficients(p.env)
-        control, _ = solve_model(information)
+        control, _ = p.solve_func(information)
     else:
         p._gen_env(x)
+
+    if control.dtype != int:
+        warnings.warn("`control` does not contain elements of type `int`, program may raise Exceptions")
+
 
     p.env.reset()
 
@@ -76,17 +85,19 @@ def render(p: SSA_Problem, x: np.ndarray[float], fig: int, control: Optional[np.
     def update(frame):
         # for each frame, update the data stored on each artist.
         for i, truth in enumerate(p.env.truths):
-            state = truth.spl(frame*truth.tstep)
-            truth_posns[i] = state[:2]
+            state_ = truth.spl(frame*truth.tstep)
+            truth_posns[i] = state_[:2]
 
         # connect the observer and target with a line
-        ctrls = np.where(control[frame] == 1)[1]
+        ctrls = np.where(control[frame] == 1.)[1]
 
         for i, observer in enumerate(p.env.observers):
             state = observer.spl(frame*observer.tstep)
             obs_posns[i] = state[:2]
+
             lines[i][0].set_xdata( [obs_posns[i,0], truth_posns[ctrls[i],0]] )
             lines[i][0].set_ydata( [obs_posns[i,1], truth_posns[ctrls[i],1]] )
+
 
         # update the scatter plots
         truth_scat.set_offsets(truth_posns)
@@ -99,7 +110,11 @@ def render(p: SSA_Problem, x: np.ndarray[float], fig: int, control: Optional[np.
 
     return ani
 
-def visualize_info_vs_phase(p: SSA_Problem, phases: np.ndarray[float], observer:int, fig: int):
+def visualize_info_vs_phase(p: SSA_Problem,
+                            phases: np.ndarray[float],
+                            observer:int,
+                            fig: int,
+                            fixed_phases: Optional[list] = None):
     """
     Visualizes the information gain versus phase for a given observer. Keeps phasing for all other observers fixed at 0.
 
@@ -118,19 +133,24 @@ def visualize_info_vs_phase(p: SSA_Problem, phases: np.ndarray[float], observer:
         - The plot represents the information gain for the observer.
     """
     sols = np.zeros_like(phases)
+    if fixed_phases is None:
+        x = np.zeros(p.num_agents)
+    else:
+        x = copy(fixed_phases)
+        x.insert(observer-1, 0.0)
+
 
     for i, phase in enumerate(phases):
-        x = np.zeros(p.num_agents)
         x[observer-1] = phase
-        sols[i] = p.fitness(x)[0]
+        sols[i] = -p.fitness(x)[0]
 
     plt.close(fig)
     plt.figure(fig)
 
     plt.xlabel("Phase")
     plt.ylabel("log(f)")
-    plt.title(f"Observer {observer} Information Gain")
-    plt.scatter(phases, np.log(-sols), color = "blue", marker='.', label="optimal")
+    plt.title(f"Objective dependence on Observer {observer} Phase")
+    plt.scatter(phases, np.log(sols), color = "blue", marker='.', label="optimal")
 
     plt.draw_if_interactive()
     

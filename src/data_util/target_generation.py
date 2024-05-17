@@ -15,7 +15,7 @@ class TargetGenerator:
         periods (np.ndarray[float]): Array containing the periods of targets.
         num_options (int): Number of initial conditions in the catalog.
         dim (int): Dimension of the target state.
-        mu (Tuple[float]): Tuple containing the mass ratio of the CR3BP system.
+        mu (float): mass ratio of the CR3BP system.
         LU (float): Unit of length in kilometers.
         TU (float): Unit of time in seconds.
         r (np.ndarray[float]): Taylor integrator object from heyokapy for integrating CR3BP equations.
@@ -45,11 +45,11 @@ class TargetGenerator:
         self.periods = np.array(periods)
         self.num_options = self.catalog.shape[0]
         self.dim = self.catalog.shape[1]
-        self.mu = (1.215058560962404e-02,)
+        self.mu = 1.215058560962404e-02
         self.LU = 384400
         self.TU = 3.751902619517228e+05
     
-        self.r, _, _ = build_taylor_cr3bp(self.mu[0], stm=True)
+        self.r, _, _ = build_taylor_cr3bp(self.mu, stm=True)
 
     def remove_from_catalog(self, catalogID:int):
         """

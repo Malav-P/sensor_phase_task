@@ -1,7 +1,8 @@
 import numpy as np
 from numpy.typing import ArrayLike
+from typing import Optional, Tuple, List
 
-from .compute_coefficients import compute_coefficients, solve_model
+from .compute_coefficients import compute_coefficients, solve_model, solve_model_maxmin
 from .spacenv import SpaceEnv
 from .state import Spline
 from data_util.target_generation import TargetGenerator
@@ -16,6 +17,7 @@ class SSA_Problem():
         target_periods (list): A list of target periods.
         agent_ics (list): A list of agent initial conditions.
         agent_periods (list): A list of agent periods.
+        opt (str): the type of optimization to run. One of either "max" or "maxmin"
     
     Attributes:
         ag (TargetGenerator): A generator/propagator for agent initial conditions.
@@ -26,6 +28,7 @@ class SSA_Problem():
         maxsteps (int) : Maximum number of timesteps for simulation.
         env (SpaceEnv): Space environment object where targets and observers are propagated.
         min_target_period (ndarray): minimum period amongst all target orbits. Excludes agent orbits!
+        solve_func (callable): a callable object that solves the integer linear program.
     
     Methods:
         fitness(x): This method evaluates the fitness of a decision vector 'x'.
@@ -35,7 +38,13 @@ class SSA_Problem():
         get_bounds(): Returns the bounds of the decision vector.
         _gen_env(x): Updates the environment given the decision vector and resets environment to initial state.
     """
-    def __init__(self, target_ics: list, target_periods:list,  agent_ics:list, agent_periods:list) -> None:
+    def __init__(self,
+                 target_ics: list,
+                 target_periods:list, 
+                 agent_ics:list,
+                 agent_periods:list,
+                 opt: Optional[str] = "max") -> None:
+        
         self.tg = TargetGenerator(target_ics, periods=target_periods)
         targets = np.array([self.tg.gen_phased_ics(catalog_ID=i, num_targets=1, gen_P=False)[0] for i in range(self.tg.num_options)])
 
@@ -52,6 +61,16 @@ class SSA_Problem():
         self.env = SpaceEnv(tmp_agents, targets, self.maxsteps, self.tstep)
         self.min_target_period = np.min(target_periods)
 
+        match opt:
+            case "max":
+                self.solve_func = solve_model
+            case "maxmin":
+                self.solve_func = solve_model_maxmin
+            case _:
+                raise ValueError(f"`opt` must a str and one of `max` or `maxmin`. Received {opt} of type {type(opt)} ")
+
+        self.opt = opt
+        
     def remove_agent(self, index:int = 0):
         """
         Removes the agent at the specified index in the list of agents and resets the Space Environment to initial state.
@@ -71,7 +90,9 @@ class SSA_Problem():
         self.maxsteps = int(np.floor(self.period/self.tstep))
         self._gen_env(x=[0.0]*self.num_agents)
 
-    def add_agent(self, agent_ic: np.ndarray[float], agent_period: float):
+    def add_agent(self,
+                  agent_ic: np.ndarray[float],
+                  agent_period: float):
         """
         Adds an agent to the problem and resets the Space Environment to initial state.
 
@@ -87,7 +108,56 @@ class SSA_Problem():
 
         self._gen_env(x=[0.0]*self.num_agents)
 
-    def fitness(self, x: ArrayLike):
+    def get_control_obj(self, x: ArrayLike) -> Tuple[np.ndarray, float]:
+        """
+        Generates the environment of the current decision vector and returns the control and objective associated with it
+
+        Args:
+            x (ArrayLike): Decision vector
+        
+        Returns:
+
+            control, obj (tuple): a tuple of the control and objective value
+        """
+
+        self._gen_env(x)
+        information = compute_coefficients(self.env)
+        control, obj = self.solve_func(information)
+
+        return control, obj
+    
+    def get_obj(self, x: ArrayLike, u:np.ndarray[int]):
+        """
+        Generate the environment of the current decision vector and return the objective associated with the given control
+
+        Args:
+            x (ArrayLike): Decision vector
+            u (np.ndarray[float]): control tensor
+
+        Returns:
+            float: objective value
+        """
+
+        self._gen_env(x)
+        information = compute_coefficients(self.env)
+
+        match self.opt:
+            case "max":
+                obj = information.reshape(-1) @ u.reshape(-1)
+            case "maxmin":
+                num_targets = self.env.truths.size
+                target_infos = np.zeros(num_targets)
+
+                for j in range(num_targets):
+                    target_infos[j] = u[:, :, j].reshape(-1) @ information[:, :, j].reshape(-1)
+
+                obj = np.min(target_infos)
+            case _:
+                raise RuntimeError(f"The optimization objective f{self.opt} is not supported")
+
+        return obj
+
+    def fitness(self, x: ArrayLike) -> List[float]:
         """
         Computes the fitness of the current decision vector and returns value appropriate for pygmo.
 
@@ -98,9 +168,7 @@ class SSA_Problem():
             list: Negative objective value.
         """
 
-        self._gen_env(x)
-        information = compute_coefficients(self.env)
-        control, objective = solve_model(information)
+        _, objective = self.get_control_obj(x)
 
         return [-objective]
     
@@ -172,8 +240,6 @@ class SSA_Problem():
         self.env.reset_new_agents(agents_info=agents_info)
 
 
-
-
 class Greedy_SSA_Problem(SSA_Problem):
     """
     This class represents the SSA_Problem suited for greedy optimization using pygmo.
@@ -183,25 +249,29 @@ class Greedy_SSA_Problem(SSA_Problem):
         target_periods (list): A list of target periods.
         agent_ics (list): A list of agent initial conditions.
         agent_periods (list): A list of agent periods.
+        opt (str): the type of optimization to run. One of either "max" or "maxmin"
+
     
     Attributes:
-        opt_phases (numpy.ndarray): An array containing the optimal phases found so far.
+        opt_phases (list): A list containing the optimal phases found so far.
+
     
     Methods:
         fitness(self, x): This method evaluates the fitness of a given solution 'x'.
         get_bounds(self): This method returns the bounds of the optimization problem. The bounds are [0, 1].
     """
-    def __init__(self, target_ics, target_periods,  agent_ics , agent_periods ) -> None:
-        super().__init__(target_ics=target_ics, target_periods=target_periods, agent_ics=agent_ics, agent_periods=agent_periods)
+    def __init__(self, target_ics, target_periods,  agent_ics , agent_periods, opt: Optional[str] = "max" ) -> None:
+        super().__init__(target_ics=target_ics, target_periods=target_periods, agent_ics=agent_ics, agent_periods=agent_periods, opt=opt)
 
-        self.opt_phases = np.array([])
+        self.opt_phases = []
+        self.opt_controls = []
 
-    def fitness(self, x):
+    def fitness(self, x: ArrayLike):
         """
         Evaluates the fitness of a given design variable 'x'. Example, x = [0.5]
         
         Parameters:
-            x (list): A list representing a design variable to the optimization problem.
+            x (ArrayLike): A list representing a design variable to the optimization problem.
         
         Returns:
             list: The fitness of the design variable 'x'.
