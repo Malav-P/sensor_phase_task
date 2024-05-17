@@ -1,6 +1,6 @@
 import pygmo as pg
 import numpy as np
-from typing import Optional, Union
+from typing import Optional, Union, List
 import time
 
 from .ssa_problem import Greedy_SSA_Problem, SSA_Problem
@@ -10,7 +10,7 @@ def greedy_search(Y: np.ndarray[float],
                   Y_periods: np.ndarray[float],
                   X: np.ndarray[float],
                   X_periods: np.ndarray[float],
-                  init_phase_guess: Optional[Union[float, list]] = 0.5,
+                  init_phase_guess: Optional[Union[float, List[float], List[List[float]]]] = None,
                   opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform greedy search optimization for the phases of all observers.
@@ -37,6 +37,12 @@ def greedy_search(Y: np.ndarray[float],
     """
     n_agents = X_periods.size
 
+    if init_phase_guess is None:
+        ics_list = np.linspace(0., 1, 10).tolist()
+        
+        init_phase_guess = [ics_list]*n_agents
+
+
     if isinstance(init_phase_guess, (float, int)):
         init_phase_guess = [init_phase_guess] * n_agents
 
@@ -50,12 +56,33 @@ def greedy_search(Y: np.ndarray[float],
     start_time = time.time()
     
     pg_problem = pg.problem(p)
-    pop = pg.population(prob=pg_problem)
-    pop.push_back(np.array([init_phase_guess[0]]))
-    scp = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
+    algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
+
+    initial_conditions = init_phase_guess[0]
+    # Create the archipelago with n_islands islands
+    archi = pg.archipelago()
+
+    # Create and add each island with its corresponding initial condition
+    for ic in initial_conditions:
+        # Create a population with the current initial condition
+        pop = pg.population(pg_problem)
+        pop.push_back([ic])
+
+        # Add the island to the archipelago
+        archi.push_back(pg.island(algo=algo, pop=pop))
+
+    archi.evolve()
+    archi.wait()
+
+    champions_x = archi.get_champions_x()
+    champions_f = archi.get_champions_f()
+    champions_f = [-item[0] for item in champions_f]
+    champ_idx = np.argmax(champions_f)
+
+    champion = champions_x[champ_idx][0]
 
     # Optimize phase of first observer
-    p.opt_phases.append(scp.evolve(pop).champion_x[0])
+    p.opt_phases.append(champion)
     control, _ = p.get_control_obj([p.opt_phases[0]])
     p.opt_controls.append(control)
 
@@ -64,12 +91,34 @@ def greedy_search(Y: np.ndarray[float],
 
         p.remove_agent(index=0)
         p.add_agent(X[i], X_periods[i])
-        pg_problem = pg.problem(p)
-        pop = pg.population(prob=pg_problem)
-        pop.push_back(np.array([init_phase_guess[i]]))
-        scp = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
-        p.opt_phases.append(scp.evolve(pop).champion_x[0])
+        pg_problem = pg.problem(p)
+        algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
+
+        initial_conditions = init_phase_guess[i]
+        # Create the archipelago with n_islands islands
+        archi = pg.archipelago()
+
+        # Create and add each island with its corresponding initial condition
+        for ic in initial_conditions:
+            # Create a population with the current initial condition
+            pop = pg.population(pg_problem)
+            pop.push_back([ic])
+    
+            # Add the island to the archipelago
+            archi.push_back(pg.island(algo=algo, pop=pop))
+
+        archi.evolve()
+        archi.wait()
+
+        champions_x = archi.get_champions_x()
+        champions_f = archi.get_champions_f()
+        champions_f = [-item[0] for item in champions_f]
+        champ_idx = np.argmax(champions_f)
+
+        champion = champions_x[champ_idx][0]
+
+        p.opt_phases.append(champion)
         control, _ = p.get_control_obj([p.opt_phases[i]])
         p.opt_controls.append(control)
             
@@ -139,10 +188,10 @@ def search(Y: np.ndarray[float],
     pg_problem = pg.problem(p)
     pop = pg.population(prob=pg_problem)
     pop.push_back(np.array(init_phase_guess))
-    scp = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
+    algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
     # Optimize phases
-    opt_phases = scp.evolve(pop).champion_x
+    opt_phases = algo.evolve(pop).champion_x
 
     end_time = time.time()
     print(f"Finished in {end_time-start_time} sec.")
