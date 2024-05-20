@@ -10,7 +10,7 @@ def greedy_search(Y: np.ndarray[float],
                   Y_periods: np.ndarray[float],
                   X: np.ndarray[float],
                   X_periods: np.ndarray[float],
-                  init_phase_guess: Optional[Union[float, List[float], List[List[float]]]] = None,
+                  init_phase_guess: Optional[List[List[float]]] = None,
                   opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform greedy search optimization for the phases of all observers.
@@ -24,7 +24,7 @@ def greedy_search(Y: np.ndarray[float],
         Y_periods (np.ndarray[float]): Periods of targets.
         X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
         X_periods (np.ndarray[float]): Periods of agents.
-        init_phase_guess (Optional[float], optional): Initial phase guess. Defaults to 0.5.
+        init_phase_guess (List[List[float]]) : Initial guesses as a list of lists. Each list contains a set of initial conditions for an observer
         opt (str): the type of inner loop optimization to run. One of either "max" or "maxmin"
 
     Returns:
@@ -59,30 +59,13 @@ def greedy_search(Y: np.ndarray[float],
     algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
     initial_conditions = init_phase_guess[0]
-    # Create the archipelago with n_islands islands
-    archi = pg.archipelago()
 
-    # Create and add each island with its corresponding initial condition
-    for ic in initial_conditions:
-        # Create a population with the current initial condition
-        pop = pg.population(pg_problem)
-        pop.push_back([ic])
-
-        # Add the island to the archipelago
-        archi.push_back(pg.island(algo=algo, pop=pop))
-
-    archi.evolve()
-    archi.wait()
-
-    champions_x = archi.get_champions_x()
-    champions_f = archi.get_champions_f()
-    champions_f = [-item[0] for item in champions_f]
-    champ_idx = np.argmax(champions_f)
-
-    champion = champions_x[champ_idx][0]
+    champion = _run_multiple_ics(initial_conditions=initial_conditions,
+                                 pg_problem=pg_problem,
+                                 algo=algo)
 
     # Optimize phase of first observer
-    p.opt_phases.append(champion)
+    p.opt_phases.append(champion[0])
     control, _ = p.get_control_obj([p.opt_phases[0]])
     p.opt_controls.append(control)
 
@@ -96,29 +79,12 @@ def greedy_search(Y: np.ndarray[float],
         algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
         initial_conditions = init_phase_guess[i]
-        # Create the archipelago with n_islands islands
-        archi = pg.archipelago()
+        champion = _run_multiple_ics(initial_conditions=initial_conditions,
+                                     pg_problem=pg_problem,
+                                     algo=algo)
 
-        # Create and add each island with its corresponding initial condition
-        for ic in initial_conditions:
-            # Create a population with the current initial condition
-            pop = pg.population(pg_problem)
-            pop.push_back([ic])
-    
-            # Add the island to the archipelago
-            archi.push_back(pg.island(algo=algo, pop=pop))
 
-        archi.evolve()
-        archi.wait()
-
-        champions_x = archi.get_champions_x()
-        champions_f = archi.get_champions_f()
-        champions_f = [-item[0] for item in champions_f]
-        champ_idx = np.argmax(champions_f)
-
-        champion = champions_x[champ_idx][0]
-
-        p.opt_phases.append(champion)
+        p.opt_phases.append(champion[0])
         control, _ = p.get_control_obj([p.opt_phases[i]])
         p.opt_controls.append(control)
             
@@ -145,7 +111,7 @@ def search(Y: np.ndarray[float],
            Y_periods: np.ndarray[float],
            X: np.ndarray[float],
            X_periods: np.ndarray[float],
-           init_phase_guess: Optional[float] = 0.5,
+           init_phase_guess: Optional[List[List[float]]] = None,
            opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform search optimization for the phases of all observers.
@@ -157,7 +123,7 @@ def search(Y: np.ndarray[float],
         Y_periods (np.ndarray[float]): Periods of targets.
         X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
         X_periods (np.ndarray[float]): Periods of agents.
-        init_phase_guess (Optional[float], optional): Initial phase guess. Defaults to 0.5.
+        init_phase_guess (List[List[float]]): Initial phase guess as a list of lists. Each list is an initial condition.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
 
     Returns:
@@ -166,8 +132,9 @@ def search(Y: np.ndarray[float],
         float: Objective value
 
     Notes:
-        - Optimization is performed using the L-BFGS-B method.
+        - Optimization is performed by running L-BFGS-B on each initial condition in parallel.
         - The function returns an array of optimized phases for each agent.
+        - each list in init_phase_guess must have length equal to the number of observers
     """
 
     n_agents = X_periods.size
@@ -186,12 +153,11 @@ def search(Y: np.ndarray[float],
     start_time = time.time()
 
     pg_problem = pg.problem(p)
-    pop = pg.population(prob=pg_problem)
-    pop.push_back(np.array(init_phase_guess))
     algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
-    # Optimize phases
-    opt_phases = algo.evolve(pop).champion_x
+    opt_phases = _run_multiple_ics(initial_conditions=init_phase_guess,
+                                   pg_problem=pg_problem,
+                                   algo=algo)
 
     end_time = time.time()
     print(f"Finished in {end_time-start_time} sec.")
@@ -199,3 +165,44 @@ def search(Y: np.ndarray[float],
     control, obj = p.get_control_obj(opt_phases)
 
     return opt_phases, control, obj
+
+def _run_multiple_ics(initial_conditions: List,
+                     pg_problem: pg.problem,
+                     algo: pg.algorithm) -> List:
+    """
+    Run separate optimization problems in parallel for each initial conditions in a a given set. Return the best solution
+
+    Args:
+        initial_conditions (List): a set of initial conditions to try. Can be type List[float] (for greedy optimization) or List[List[float]] (for regular search)
+        pg_problem (pygmo.problem): an Pygmo problem instance
+        algo (pg.algorithm): a Pygmo algorithm instance
+
+    Returns:
+        champion (List): the best candidate out of all the optimization runs
+    
+    """
+    # Create the archipelago with n_islands islands
+    archi = pg.archipelago()
+
+    # Create and add each island with its corresponding initial condition
+    for ic in initial_conditions:
+        # Create a population with the current initial condition
+        if isinstance(ic, float):
+            ic = [ic]
+        pop = pg.population(pg_problem)
+        pop.push_back(ic)
+
+        # Add the island to the archipelago
+        archi.push_back(pg.island(algo=algo, pop=pop))
+
+    archi.evolve()
+    archi.wait()
+
+    champions_x = archi.get_champions_x()
+    champions_f = archi.get_champions_f()
+    champions_f = [-item[0] for item in champions_f]
+    champ_idx = np.argmax(champions_f)
+
+    champion = champions_x[champ_idx].tolist()
+
+    return champion
