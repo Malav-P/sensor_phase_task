@@ -65,7 +65,11 @@ def solve_model(information: np.ndarray[float]):
         - The optimization model maximizes the total information obtained by assigning observers to targets.
         - Each observer is constrained to look at only one target at each time step.
     """
-    m = gp.Model("sensortask")
+    env = gp.Env(empty=True)
+    env.setParam("OutputFlag",0)
+    env.start()
+
+    m = gp.Model("sensortask", env=env)
 
     # Silence model output
     m.Params.LogToConsole = 0
@@ -106,7 +110,11 @@ def solve_model_maxmin(information: np.ndarray[float]):
         - The optimization model maximizes the minimum information amongst targets.
         - Each observer is constrained to look at only one target at each time step.
     """
-    m = gp.Model("sensortask")
+    env = gp.Env(empty=True)
+    env.setParam("OutputFlag",0)
+    env.start()
+
+    m = gp.Model("sensortask", env=env)
 
     # Silence model output
     m.Params.LogToConsole = 0

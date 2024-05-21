@@ -232,3 +232,49 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
     plt.draw_if_interactive()
 
     return
+
+
+def _visualize_info_other_observers_fixed(prob: SSA_Problem, observer: int, fig_num: int):
+    """
+    Create a grid of plots showing the log objective as the phase of an observer is varied, keeping all other observers 
+    at fixed phase. Each axes will have a different fixed phase.
+
+    Args:
+        prob : an instance of an SSA_Problem
+        observer: the id of the observer whose phase we'd like to vary
+        fig_num: the integer identifier for the figure to plot on
+
+    """
+
+    plt.close(fig_num)
+    plt.figure(fig_num, figsize=(10,6))
+
+    n_observers = prob.num_agents
+    fig, axs = plt.subplots(2, 3, num=fig_num)
+
+    fig.suptitle(f"Log Objective Vs. Observer {observer} phase")
+
+
+    phases = np.linspace(0.0, 1.0, 40)
+
+    fixed_phases = [0.0, 0.1, 0.3, 0.5, 0.7, 0.9]
+
+    for i, ax in enumerate(axs.flatten()):
+        sols = np.zeros_like(phases)
+
+        x = [fixed_phases[i]]*n_observers
+        
+        for j, phase in enumerate(phases):
+            x[observer-1] = phase
+            sols[j] = -prob.fitness(x)[0]
+        
+        ax.set_xlabel("Phase")
+        ax.set_ylabel("log(f)")
+        ax.set_title(f"Fixed Obs Phase = {fixed_phases[i]}")
+        ax.scatter(phases, np.log(sols), color = "blue", marker='.', s=2)
+
+    
+    plt.tight_layout()
+    plt.show()
+
+    return
