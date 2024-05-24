@@ -194,6 +194,13 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
             z = state_hist[:,3]
             ax.plot3D(x, y, z, color="red", linewidth=0.5)
 
+        # Creating dummy plots for legend
+        red_line = plt.Line2D((0,1),(0,0), color='r', linewidth=2)
+        black_line = plt.Line2D((0,1),(0,0), color='k', linewidth=2)
+
+        # Adding the legend
+        ax.legend([red_line, black_line], ['Agent', 'Target'])
+
     else:
 
         match projection:
@@ -228,6 +235,14 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
         plt.xlabel(f"{xlabel} (DU)")
         plt.ylabel(f"{ylabel} (DU)")
         plt.title("Agent/Target Orbits")
+
+        # Creating dummy plots for legend
+        red_line = plt.Line2D((0,1),(0,0), color='r', linewidth=2)
+        black_line = plt.Line2D((0,1),(0,0), color='k', linewidth=2)
+
+        # Adding the legend
+        plt.legend([red_line, black_line], ['Agent', 'Target'])
+
 
     plt.draw_if_interactive()
 

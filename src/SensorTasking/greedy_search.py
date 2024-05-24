@@ -139,6 +139,11 @@ def search(Y: np.ndarray[float],
 
     n_agents = X_periods.size
 
+    if init_phase_guess is None:
+        ics_list = np.linspace(0., 0.9, 10).tolist()
+        
+        init_phase_guess = [[ic]*n_agents for ic in ics_list]
+
     if isinstance(init_phase_guess, (float, int)):
         init_phase_guess = [init_phase_guess] * n_agents
 
