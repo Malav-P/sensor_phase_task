@@ -12,7 +12,8 @@ from SensorTasking.compute_coefficients import compute_coefficients
 def render(p: SSA_Problem,
            x: np.ndarray[float],
            fig: int,
-           control: Optional[np.ndarray[int]]= None):
+           control: Optional[np.ndarray[int]]= None,
+           save: Optional[bool] = False):
     """
     Renders the simulation animation for the given SSA problem and agent phases.
 
@@ -21,7 +22,7 @@ def render(p: SSA_Problem,
         x (np.ndarray[float]): The phases of each observer.
         fig (int): The figure number to use for the animation.
         control (Optional[np.ndarray[int]], optional): The control sequence. Defaults to None.
-
+        save : Saves gif to file if True
     Returns:
         animation.FuncAnimation: The animation object.
 
@@ -35,6 +36,9 @@ def render(p: SSA_Problem,
     plt.close(fig)
     fig1 = plt.figure(fig)
     ax = fig1.add_axes([0.1, 0.1, 0.8, 0.8])
+    # ax.set_title(f"Opt: {p.opt}")
+    # ax.set_xlabel("x (DU)")
+    # ax.set_ylabel("y (DU)")
 
     if control is None:
         p._gen_env(x)
@@ -104,9 +108,16 @@ def render(p: SSA_Problem,
         obs_scat.set_offsets(obs_posns)
 
         return (truth_scat, obs_scat, *lines)
-
-
+    
+    
     ani = animation.FuncAnimation(fig=fig1, func=update, frames=p.env.maxsteps, interval=30)
+
+    if save:
+
+        writer = animation.PillowWriter(fps=15,
+                                        metadata=dict(artist='Me'),
+                                        bitrate=1800)
+        ani.save('animation.gif', writer=writer)
 
     return ani
 
@@ -114,7 +125,10 @@ def visualize_info_vs_phase(p: SSA_Problem,
                             phases: np.ndarray[float],
                             observer:int,
                             fig: int,
-                            fixed_phases: Optional[list] = None):
+                            fixed_phases: Optional[list] = None,
+                            show_myopic: Optional[bool] = False,
+                            show_ROG: Optional[bool] = True,
+                            marker: Optional[str] = "."):
     """
     Visualizes the information gain versus phase for a given observer. Keeps phasing for all other observers fixed at 0.
 
@@ -123,35 +137,67 @@ def visualize_info_vs_phase(p: SSA_Problem,
         phases (np.ndarray[float]): An array of phase values.
         observer (int): The index of the observer.
         fig (int): The figure number for plotting.
+        fixed_phases (list): A list of len num_observers - 1 containing the phases to fix other observers at
+        show_myopic (bool): Whether to show the myopic policy as well.
+        show_ROG (bool): Whether to show the ROG. Defaults to True. Is ignored if show_myopic is False
 
     Returns:
         None
 
     Notes:
         - Computes fitness values for the given phases and observer.
-        - Plots the phase against the logarithm of the fitness values.
+        - Plots the phase against the fitness values on a log scale
         - The plot represents the information gain for the observer.
     """
     sols = np.zeros_like(phases)
+    opt_controls = []
     if fixed_phases is None:
         x = np.zeros(p.num_agents)
     else:
         x = copy(fixed_phases)
         x.insert(observer-1, 0.0)
 
-
+    
     for i, phase in enumerate(phases):
         x[observer-1] = phase
-        sols[i] = -p.fitness(x)[0]
+        opt_control, sols[i] = p.get_control_obj(x)
+        opt_controls.append(copy(opt_control))
 
     plt.close(fig)
     plt.figure(fig)
 
     plt.xlabel("Phase")
-    plt.ylabel("log(f)")
+    plt.ylabel("f")
+    plt.yscale("log")
     plt.title(f"Objective dependence on Observer {observer} Phase")
-    plt.scatter(phases, np.log(sols), color = "blue", marker='.', label="optimal")
+    plt.scatter(phases, sols, color = "blue", marker=marker, label=f"optimal")
 
+    
+    if show_myopic:
+        myopic_sols = np.zeros_like(sols)
+        for i, phase in enumerate(phases):
+            x[observer-1] = phase
+            obj_in_list, myop_control = p.myopic_fitness(x)
+            myopic_sols[i] = -obj_in_list[0]
+
+            num_diff_control = np.sum(np.abs(myop_control - opt_controls[i])) / 2
+
+        rel_obj_gap = np.mean((sols - myopic_sols)/sols)
+        # abs_obj_gap = np.mean(sols - myopic_sols)
+        print("Rel Obj Gap", rel_obj_gap)
+        # print("Abs Obj Gap", abs_obj_gap)
+
+        
+        plt.scatter(phases, myopic_sols, color = "red", marker=marker, label=f"myopic")
+        if show_ROG:
+            # Add a text box to show the value of rel_obj_gap
+            plt.text(0.05, 0.6, f'ROG: {rel_obj_gap*100:.1f} %', transform=plt.gca().transAxes,
+                fontsize=12, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.5))
+        plt.legend()
+
+
+
+    # plt.scatter(phases, np.log(sols - myopic_sols), color = "black", marker='.', label="difference")
     plt.draw_if_interactive()
     
     return
@@ -284,9 +330,10 @@ def _visualize_info_other_observers_fixed(prob: SSA_Problem, observer: int, fig_
             sols[j] = -prob.fitness(x)[0]
         
         ax.set_xlabel("Phase")
-        ax.set_ylabel("log(f)")
+        ax.set_ylabel("f")
+        ax.set_yscale("log")
         ax.set_title(f"Fixed Obs Phase = {fixed_phases[i]}")
-        ax.scatter(phases, np.log(sols), color = "blue", marker='.', s=2)
+        ax.scatter(phases, sols, color = "blue", marker='.', s=2)
 
     
     plt.tight_layout()

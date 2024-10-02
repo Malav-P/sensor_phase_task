@@ -1,0 +1,14 @@
+name: sensortask
+channels:
+  - malavp
+  - conda-forge
+dependencies:
+  - gurobi::gurobi
+  - ipykernel
+  - matplotlib
+  - numpy
+  - scipy
+  - ipympl
+  - pygmo
+  - heyoka.py
+prefix: /opt/homebrew/Caskroom/miniconda/base/envs/sensortask

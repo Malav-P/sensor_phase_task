@@ -236,13 +236,11 @@ class Analytic(State):
     def __init__(self,
                 x0: np.ndarray[float],
                 tstep: float,
-                functions: List[Callable[[float], float]]):
+                functions: Callable[[float], float]):
         
         super().__init__(x0, tstep)
         self.functions = functions
 
-        if x0.size != functions.size:
-            raise ValueError("Number of variables and functions mismatch.")
 
     def propagate(self, steps: Optional[int] = 1):
         """
@@ -255,8 +253,8 @@ class Analytic(State):
             np.ndarray[float]: The propagated state vector.
         """
         self.t += steps*self.tstep
-        for i in range(self.x.size):
-            self.x[i] = self.functions[i](self.t)
+
+        self.x = self.functions(self.x, self.t)
 
         return self.x
     

@@ -185,7 +185,7 @@ class SSA_Problem():
         self._gen_env(x)
         information = compute_coefficients(self.env)
 
-        self.env.reset()
+        # self.env.reset()
 
         u = np.zeros_like(information, dtype=int)
 
@@ -200,9 +200,16 @@ class SSA_Problem():
                 # print(self.env.observers[0].x[:3], self.env.truths[0].x[:3])  Used for debugging, can delete
 
             out = self.env.step()
+
+        if self.opt == "max":
+            obj = u.reshape(-1) @ information.reshape(-1)
+        elif self.opt == "maxmin":
+            obj = np.min(np.einsum('ijk,ijk->k', u, information))
+        else:
+            raise NotImplementedError
         
     
-        return [-u.reshape(-1) @ information.reshape(-1)], u
+        return [-obj], u
 
     def _closest_target(self, observer: Spline):
         """

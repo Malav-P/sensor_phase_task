@@ -171,6 +171,74 @@ def search(Y: np.ndarray[float],
 
     return opt_phases, control, obj
 
+def sga_search(Y: np.ndarray[float],
+           Y_periods: np.ndarray[float],
+           X: np.ndarray[float],
+           X_periods: np.ndarray[float],
+           init_phase_guess: Optional[List[List[float]]] = None,
+           opt: Optional[str] = "max") -> np.ndarray[float]:
+    """
+    Perform search optimization for the phases of all observers using a simple genetic algorithm
+
+    This function optimizes the phases of observers using a simple genetic algorithm from pygmo. 
+
+    Parameters:
+        Y (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
+        Y_periods (np.ndarray[float]): Periods of targets.
+        X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
+        X_periods (np.ndarray[float]): Periods of agents.
+        init_phase_guess (List[List[float]]): Initial phase guess as a list of lists. Each list is an initial condition.
+        opt (str): the type of optimization to run. One of either "max" or "maxmin"
+
+    Returns:
+        np.ndarray[float]: Array containing optimized phases for alignment.
+        np.ndarray[int]: Array containing control for all observers.
+        float: Objective value
+
+    """
+
+    n_agents = X_periods.size
+
+    if init_phase_guess is None:
+        ics_list = np.linspace(0., 0.9, 10).tolist()
+        
+        init_phase_guess = [[ic]*n_agents for ic in ics_list]
+
+    if isinstance(init_phase_guess, (float, int)):
+        init_phase_guess = [[init_phase_guess] * n_agents]
+
+    # Initialize instance of problem with first agent
+    p = SSA_Problem(target_ics=Y,
+                    target_periods=Y_periods,
+                    agent_ics=X,
+                    agent_periods=X_periods,
+                    opt=opt)
+    print("Beginning Optimization...\n")
+
+    start_time = time.time()
+
+    pg_problem = pg.problem(p)
+    algo = pg.algorithm(pg.sga(gen=100))
+
+    pop = pg.population(pg_problem)
+    for ic in init_phase_guess:
+        if isinstance(ic, float):
+            ic = [ic]
+        pop.push_back(ic)
+
+    print("population size :", pop.get_ID().size)
+
+    pop = algo.evolve(pop)
+
+    opt_phases = pop.champion_x.tolist()
+
+    end_time = time.time()
+    print(f"Finished in {end_time-start_time} sec.")
+
+    control, obj = p.get_control_obj(opt_phases)
+
+    return opt_phases, control, obj
+
 def _run_multiple_ics(initial_conditions: List,
                      pg_problem: pg.problem,
                      algo: pg.algorithm) -> List:
