@@ -25,9 +25,9 @@ def compute_coefficients(env: SpaceEnv):
 
     env.reset()
 
-    dt = 0.1*env.tstep
+    dt = 0.1*env.tstep # observation time is 10 percent of timstep 
 
-    sigma =  3 * np.pi / 180
+    sigma =  3 * np.pi / 180 # observation uncertainty is 3 degrees
     R_inv = 1 / sigma**2 * np.block([[np.eye(3), np.zeros(shape=(3, 3))], [np.zeros(shape=(3,3)), (0.5 * dt**2)*np.eye(3)]])
 
     information = np.zeros(shape=(env.maxsteps, env.observers.size, env.truths.size), dtype=float)
@@ -37,7 +37,7 @@ def compute_coefficients(env: SpaceEnv):
         out = env.step()
         Hs = out[-1]
 
-        for j,truth in enumerate(env.truths):
+        for j, truth in enumerate(env.truths):
             phi_tk_t0 = truth.eval_stm_spl( truth.t - truth.tstep / 2)
             phi_tL_t0 = truth.eval_stm_spl(truth.period)
 
@@ -49,7 +49,7 @@ def compute_coefficients(env: SpaceEnv):
 
     return information
 
-def solve_model(information: np.ndarray[float]):
+def solve_model_max(information: np.ndarray[float]):
     """
     Solves the optimization model to assign observers to targets based on information coefficients.
 

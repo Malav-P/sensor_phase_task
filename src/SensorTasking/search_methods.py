@@ -6,11 +6,11 @@ import time
 from .ssa_problem import Greedy_SSA_Problem, SSA_Problem
 
 
-def greedy_search(Y: np.ndarray[float],
-                  Y_periods: np.ndarray[float],
-                  X: np.ndarray[float],
-                  X_periods: np.ndarray[float],
-                  init_phase_guess: Optional[List[List[float]]] = None,
+def greedy_search(targets: np.ndarray[float],
+                  target_periods: np.ndarray[float],
+                  agents: np.ndarray[float],
+                  agent_periods: np.ndarray[float],
+                  init_phase_guess: Optional[np.ndarray[float]] = None,
                   opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform greedy search optimization for the phases of all observers.
@@ -20,37 +20,41 @@ def greedy_search(Y: np.ndarray[float],
     for a chosen phase. The phase is varied and optimized with an L-BFGS algorithm.
 
     Parameters:
-        Y (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
-        Y_periods (np.ndarray[float]): Periods of targets.
-        X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
-        X_periods (np.ndarray[float]): Periods of agents.
-        init_phase_guess (List[List[float]]) : Initial guesses as a list of lists. Each list contains a set of initial conditions for an observer
+        targets (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
+        target_periods (np.ndarray[float]): Periods of targets.
+        agents (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
+        agent_periods (np.ndarray[float]): Periods of agents.
+        init_phase_guess (np.ndarray[float]) : Initial guesses as a 2D numpy array. Each column contains a set of initial conditions for an observer
         opt (str): the type of inner loop optimization to run. One of either "max" or "maxmin"
 
     Returns:
-        np.ndarray[float]: Array containing optimized phases.
-        np.ndarray[int]: Control for observers in constellation
+        np.ndarray[float]: Array containing optimized phases for alignment.
+        np.ndarray[int]: Array containing control for all observers.
+        float: Objective value
 
     Notes:
         - Optimization is performed using the L-BFGS-B method.
         - The function returns an array of optimized phase for each agent.
     """
-    n_agents = X_periods.size
+    n_agents = agent_periods.size
 
     if init_phase_guess is None:
-        ics_list = np.linspace(0., 1, 10).tolist()
-        
-        init_phase_guess = [ics_list]*n_agents
-
+        ics = np.linspace(0., 1, 10).reshape(-1, 1)
+        init_phase_guess = np.tile(ics, (1, n_agents))
 
     if isinstance(init_phase_guess, (float, int)):
-        init_phase_guess = [init_phase_guess] * n_agents
+        ics = np.array([init_phase_guess])
+        init_phase_guess = np.tile(ics, (1, n_agents))
+
+    if not (init_phase_guess.ndim == 2 and init_phase_guess.shape[1] == n_agents):
+        raise ValueError("init_phase_guess must be a 2d numpy array with number of columns equal to number of agents")
+
 
     # Initialize instance of problem with first agent
-    p = Greedy_SSA_Problem(target_ics=Y,
-                           target_periods=Y_periods,
-                           agent_ics=[X[0]],
-                           agent_periods=[X_periods[0]],
+    p = Greedy_SSA_Problem(targets=targets,
+                           target_periods=target_periods,
+                           agents=[agents[0]],
+                           agent_periods=[agent_periods[0]],
                            opt=opt)
     print("Beginning Optimization...\n")
     start_time = time.time()
@@ -58,7 +62,7 @@ def greedy_search(Y: np.ndarray[float],
     pg_problem = pg.problem(p)
     algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
-    initial_conditions = init_phase_guess[0]
+    initial_conditions = init_phase_guess[:, 0]
 
     champion = _run_multiple_ics(initial_conditions=initial_conditions,
                                  pg_problem=pg_problem,
@@ -73,12 +77,12 @@ def greedy_search(Y: np.ndarray[float],
     for i in range(1, n_agents):
 
         p.remove_agent(index=0)
-        p.add_agent(X[i], X_periods[i])
+        p.add_agent(agents[i], agent_periods[i])
 
         pg_problem = pg.problem(p)
         algo = pg.algorithm(pg.scipy_optimize(method="L-BFGS-B"))
 
-        initial_conditions = init_phase_guess[i]
+        initial_conditions = init_phase_guess[:, i]
         champion = _run_multiple_ics(initial_conditions=initial_conditions,
                                      pg_problem=pg_problem,
                                      algo=algo)
@@ -97,21 +101,21 @@ def greedy_search(Y: np.ndarray[float],
     for i, elem in enumerate(p.opt_controls):
         control[:, i, :] = np.squeeze(elem, axis=1)
 
-    p_ = SSA_Problem(target_ics=Y,
-                    target_periods=Y_periods,
-                    agent_ics=X,
-                    agent_periods=X_periods,
+    p_ = SSA_Problem(targets=targets,
+                    target_periods=target_periods,
+                    agents=agents,
+                    agent_periods=agent_periods,
                     opt=opt)
     
     objective = p_.get_obj(x=p.opt_phases, u=control)
 
     return p.opt_phases, control, objective
 
-def search(Y: np.ndarray[float],
-           Y_periods: np.ndarray[float],
-           X: np.ndarray[float],
-           X_periods: np.ndarray[float],
-           init_phase_guess: Optional[List[List[float]]] = None,
+def search(targets: np.ndarray[float],
+           target_periods: np.ndarray[float],
+           agents: np.ndarray[float],
+           agent_periods: np.ndarray[float],
+           init_phase_guess: Optional[np.ndarray[float]] = None,
            opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform search optimization for the phases of all observers.
@@ -119,11 +123,11 @@ def search(Y: np.ndarray[float],
     This function optimizes the phases of observers using L-BFGS-B. 
 
     Parameters:
-        Y (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
-        Y_periods (np.ndarray[float]): Periods of targets.
-        X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
-        X_periods (np.ndarray[float]): Periods of agents.
-        init_phase_guess (List[List[float]]): Initial phase guess as a list of lists. Each list is an initial condition.
+        targets (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
+        target_periods (np.ndarray[float]): Periods of targets.
+        agents (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
+        agent_periods (np.ndarray[float]): Periods of agents.
+        init_phase_guess (np.ndarray[float]): Initial phase guess as a 2d numpy array. Each row is an initial condition.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
 
     Returns:
@@ -137,21 +141,25 @@ def search(Y: np.ndarray[float],
         - each list in init_phase_guess must have length equal to the number of observers
     """
 
-    n_agents = X_periods.size
+    n_agents = agent_periods.size
 
     if init_phase_guess is None:
-        ics_list = np.linspace(0., 0.9, 10).tolist()
-        
-        init_phase_guess = [[ic]*n_agents for ic in ics_list]
+        ics = np.linspace(0., 1, 10).reshape(-1, 1)
+        init_phase_guess = np.tile(ics, (1, n_agents))
 
     if isinstance(init_phase_guess, (float, int)):
-        init_phase_guess = [init_phase_guess] * n_agents
+        ics = np.array([init_phase_guess])
+        init_phase_guess = np.tile(ics, (1, n_agents))
+
+    if not (init_phase_guess.ndim == 2 and init_phase_guess.shape[1] == n_agents):
+        raise ValueError("init_phase_guess must be a 2d numpy array with number of columns equal to number of agents")
+
 
     # Initialize instance of problem with first agent
-    p = SSA_Problem(target_ics=Y,
-                    target_periods=Y_periods,
-                    agent_ics=X,
-                    agent_periods=X_periods,
+    p = SSA_Problem(targets=targets,
+                    target_periods=target_periods,
+                    agents=agents,
+                    agent_periods=agent_periods,
                     opt=opt)
     print("Beginning Optimization...\n")
 
@@ -171,11 +179,11 @@ def search(Y: np.ndarray[float],
 
     return opt_phases, control, obj
 
-def sga_search(Y: np.ndarray[float],
-           Y_periods: np.ndarray[float],
-           X: np.ndarray[float],
-           X_periods: np.ndarray[float],
-           init_phase_guess: Optional[List[List[float]]] = None,
+def sga_search(targets: np.ndarray[float],
+           target_periods: np.ndarray[float],
+           agents: np.ndarray[float],
+           agent_periods: np.ndarray[float],
+           init_phase_guess: Optional[np.ndarray[float]] = None,
            opt: Optional[str] = "max") -> np.ndarray[float]:
     """
     Perform search optimization for the phases of all observers using a simple genetic algorithm
@@ -183,11 +191,11 @@ def sga_search(Y: np.ndarray[float],
     This function optimizes the phases of observers using a simple genetic algorithm from pygmo. 
 
     Parameters:
-        Y (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
-        Y_periods (np.ndarray[float]): Periods of targets.
-        X (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
-        X_periods (np.ndarray[float]): Periods of agents.
-        init_phase_guess (List[List[float]]): Initial phase guess as a list of lists. Each list is an initial condition.
+        targets (np.ndarray[float]): Initial conditions of targets. Each row is an initial condition.
+        target_periods (np.ndarray[float]): Periods of targets.
+        agents (np.ndarray[float]): Initial conditions of agents. Each row is an initial condition.
+        agent_periods (np.ndarray[float]): Periods of agents.
+        init_phase_guess (np.ndarray[float]): Initial phase guess as a list of lists. Each list is an initial condition.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
 
     Returns:
@@ -197,21 +205,25 @@ def sga_search(Y: np.ndarray[float],
 
     """
 
-    n_agents = X_periods.size
+    n_agents = agent_periods.size
 
     if init_phase_guess is None:
-        ics_list = np.linspace(0., 0.9, 10).tolist()
-        
-        init_phase_guess = [[ic]*n_agents for ic in ics_list]
+        ics = np.linspace(0., 1, 10).reshape(-1, 1)
+        init_phase_guess = np.tile(ics, (1, n_agents))
 
     if isinstance(init_phase_guess, (float, int)):
-        init_phase_guess = [[init_phase_guess] * n_agents]
+        ics = np.array([init_phase_guess])
+        init_phase_guess = np.tile(ics, (1, n_agents))
+
+    if not (init_phase_guess.ndim == 2 and init_phase_guess.shape[1] == n_agents):
+        raise ValueError("init_phase_guess must be a 2d numpy array with number of columns equal to number of agents")
+
 
     # Initialize instance of problem with first agent
-    p = SSA_Problem(target_ics=Y,
-                    target_periods=Y_periods,
-                    agent_ics=X,
-                    agent_periods=X_periods,
+    p = SSA_Problem(targets=targets,
+                    target_periods=target_periods,
+                    agents=agents,
+                    agent_periods=agent_periods,
                     opt=opt)
     print("Beginning Optimization...\n")
 
@@ -230,7 +242,7 @@ def sga_search(Y: np.ndarray[float],
 
     pop = algo.evolve(pop)
 
-    opt_phases = pop.champion_x.tolist()
+    opt_phases = pop.champion_x
 
     end_time = time.time()
     print(f"Finished in {end_time-start_time} sec.")
@@ -239,19 +251,19 @@ def sga_search(Y: np.ndarray[float],
 
     return opt_phases, control, obj
 
-def _run_multiple_ics(initial_conditions: List,
+def _run_multiple_ics(initial_conditions: np.ndarray[float],
                      pg_problem: pg.problem,
                      algo: pg.algorithm) -> List:
     """
     Run separate optimization problems in parallel for each initial conditions in a a given set. Return the best solution
 
     Args:
-        initial_conditions (List): a set of initial conditions to try. Can be type List[float] (for greedy optimization) or List[List[float]] (for regular search)
+        initial_conditions (np.ndarray): a set of initial conditions to try. Can be 1d array (for greedy optimization) or 2d (for regular search)
         pg_problem (pygmo.problem): an Pygmo problem instance
         algo (pg.algorithm): a Pygmo algorithm instance
 
     Returns:
-        champion (List): the best candidate out of all the optimization runs
+        champion (np.ndarray): the best candidate out of all the optimization runs
     
     """
     # Create the archipelago with n_islands islands
@@ -276,6 +288,6 @@ def _run_multiple_ics(initial_conditions: List,
     champions_f = [-item[0] for item in champions_f]
     champ_idx = np.argmax(champions_f)
 
-    champion = champions_x[champ_idx].tolist()
+    champion = champions_x[champ_idx]
 
     return champion

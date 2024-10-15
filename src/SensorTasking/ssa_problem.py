@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import ArrayLike
 from typing import Optional, Tuple, List
 
-from .compute_coefficients import compute_coefficients, solve_model, solve_model_maxmin
+from .compute_coefficients import compute_coefficients, solve_model_max, solve_model_maxmin
 from .spacenv import SpaceEnv
 from .state import Spline
 from data_util.target_generation import TargetGenerator
@@ -13,10 +13,10 @@ class SSA_Problem():
     This class defines the Space Situational Awareness (SSA) Problem.
     
     Parameters:
-        target_ics (list): A list of target initial conditions.
-        target_periods (list): A list of target periods.
-        agent_ics (list): A list of agent initial conditions.
-        agent_periods (list): A list of agent periods.
+        targets (ArrayLike): A array of target initial conditions.
+        target_periods (ArrayLike): A array of target periods.
+        agents (ArrayLike): A array of agent initial conditions.
+        agent_periods (ArrayLike): A array of agent periods.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
     
     Attributes:
@@ -39,16 +39,16 @@ class SSA_Problem():
         _gen_env(x): Updates the environment given the decision vector and resets environment to initial state.
     """
     def __init__(self,
-                 target_ics: list,
-                 target_periods:list, 
-                 agent_ics:list,
-                 agent_periods:list,
+                 targets: ArrayLike,
+                 target_periods: ArrayLike, 
+                 agents: ArrayLike,
+                 agent_periods: ArrayLike,
                  opt: Optional[str] = "max") -> None:
         
-        self.tg = TargetGenerator(target_ics, periods=target_periods)
+        self.tg = TargetGenerator(targets, periods=target_periods)
         targets = np.array([self.tg.gen_phased_ics(catalog_ID=i, num_targets=1, gen_P=False)[0] for i in range(self.tg.num_options)])
 
-        self.ag = TargetGenerator(agent_ics, periods = agent_periods)
+        self.ag = TargetGenerator(agents, periods = agent_periods)
         self.num_agents = len(agent_periods)
 
 
@@ -63,7 +63,7 @@ class SSA_Problem():
 
         match opt:
             case "max":
-                self.solve_func = solve_model
+                self.solve_func = solve_model_max
             case "maxmin":
                 self.solve_func = solve_model_maxmin
             case _:
@@ -252,10 +252,10 @@ class Greedy_SSA_Problem(SSA_Problem):
     This class represents the SSA_Problem suited for greedy optimization using pygmo.
     
     Parameters:
-        target_ics (list): A list of target initial conditions.
-        target_periods (list): A list of target periods.
-        agent_ics (list): A list of agent initial conditions.
-        agent_periods (list): A list of agent periods.
+        targets (ArrayLike): A array of target initial conditions.
+        target_periods (ArrayLike): A array of target periods.
+        agents (ArrayLike): A array of agent initial conditions.
+        agent_periods (ArrayLike): A array of agent periods.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
 
     
@@ -267,8 +267,8 @@ class Greedy_SSA_Problem(SSA_Problem):
         fitness(self, x): This method evaluates the fitness of a given solution 'x'.
         get_bounds(self): This method returns the bounds of the optimization problem. The bounds are [0, 1].
     """
-    def __init__(self, target_ics, target_periods,  agent_ics , agent_periods, opt: Optional[str] = "max" ) -> None:
-        super().__init__(target_ics=target_ics, target_periods=target_periods, agent_ics=agent_ics, agent_periods=agent_periods, opt=opt)
+    def __init__(self, targets, target_periods,  agents , agent_periods, opt: Optional[str] = "max" ) -> None:
+        super().__init__(targets=targets, target_periods=target_periods, agents=agents, agent_periods=agent_periods, opt=opt)
 
         self.opt_phases = []
         self.opt_controls = []

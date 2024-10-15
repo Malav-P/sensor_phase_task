@@ -2,6 +2,9 @@
 # Adapted from https://web.archive.org/web/20170217222640/http://www.acfr.usyd.edu.au/pdfs/training/IntroDataFusionSlides.pdf
 #         and  https://en.wikipedia.org/wiki/Extended_Kalman_filter
 
+
+# THIS FILE IS DEPRECATED
+
 import numpy as np
 from .state import Dynamics
 

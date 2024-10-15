@@ -297,7 +297,7 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
 
 def _visualize_info_other_observers_fixed(prob: SSA_Problem, observer: int, fig_num: int):
     """
-    Create a grid of plots showing the log objective as the phase of an observer is varied, keeping all other observers 
+    Create a grid of plots showing the objective as the phase of an observer is varied, keeping all other observers 
     at fixed phase. Each axes will have a different fixed phase.
 
     Args:
@@ -313,7 +313,7 @@ def _visualize_info_other_observers_fixed(prob: SSA_Problem, observer: int, fig_
     n_observers = prob.num_agents
     fig, axs = plt.subplots(2, 3, num=fig_num)
 
-    fig.suptitle(f"Log Objective Vs. Observer {observer} phase")
+    fig.suptitle(f"Objective Vs. Observer {observer} phase")
 
 
     phases = np.linspace(0.0, 1.0, 40)

@@ -45,9 +45,9 @@ class TargetGenerator:
         self.periods = np.array(periods)
         self.num_options = self.catalog.shape[0]
         self.dim = self.catalog.shape[1]
-        self.mu = 1.215058560962404e-02
-        self.LU = 384400
-        self.TU = 3.751902619517228e+05
+        self.mu = 1.215058560962404e-02  # earth-moon mass ratio
+        self.LU = 384400 # Earth-moon distance (km)
+        self.TU = 3.751902619517228e+05 # time unit
     
         self.r, _, _ = build_taylor_cr3bp(self.mu, stm=True)
 
