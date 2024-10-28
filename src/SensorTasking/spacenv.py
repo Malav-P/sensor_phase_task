@@ -1,5 +1,19 @@
 import numpy as np
 from .state import Spline
+from typing import Optional
+
+class MeasureParams:
+    """
+    Simple struct to hold measurement parameters
+
+    Attributes:
+        observation_frac (float) : observation time as a fraction of chosen timestep. E.g. 0.9 means 90 percent of timestep spend observing
+        sigma (float) : angles only measurement uncertainty in degrees
+    """
+
+    def __init__(self, obs_frac, sigma):
+        self.observation_frac = obs_frac
+        self.sigma = sigma
 
 class SpaceEnv:
     """
@@ -13,16 +27,22 @@ class SpaceEnv:
         elapsed_steps (int): Number of steps elapsed.
         observers (np.ndarray): Array of observers.
         truths (np.ndarray): Array of truths/targets.
+        measure_params (MeasurementParams) : struct holding measurement params
 
     Methods:
-        __init__(agents, targets, maxsteps, tstep): Initializes the SpaceEnv with agents, targets, maximum steps, and time step.
+        __init__(agents, targets, maxsteps, tstep, measure_params): Initializes the SpaceEnv with agents, targets, maximum steps, and time step.
         reset(): Resets the environment to its initial state.
         step(): Advances the environment by one step and returns termination status and observation Jacobians.
         _get_obs_jacobian(truth, observer): Computes the observation Jacobian between a truth and an observer.
         reset_new_agents(agents): Adds agents to environment and resets the environment.
 
     """
-    def __init__(self, agents:np.ndarray[dict], targets: np.ndarray[dict], maxsteps: int, tstep: float):
+    def __init__(self,
+                 agents:np.ndarray[dict],
+                 targets: np.ndarray[dict],
+                 maxsteps: int,
+                 tstep: float,
+                 measure_params: Optional[MeasureParams] = None):
         """
         Initializes the SpaceEnv with agents, targets, maximum steps, and time step.
 
@@ -31,6 +51,7 @@ class SpaceEnv:
             targets (np.ndarray): Array containing information about targets.
             maxsteps (int): Maximum number of steps.
             tstep (float): Time step.
+            measure_params (MeasureParams) : struct containing measurement params
 
         """
         self.M  = targets.size
@@ -42,6 +63,11 @@ class SpaceEnv:
 
         self.observers = np.array( [Spline( tstep=tstep, spl=agents[i]["spline"], stm_spl = agents[i]["stm_spline"], period=agents[i]["period"]) for i in range(self.N)] )
         self.truths = np.array( [Spline( tstep=tstep, spl=targets[i]["spline"], stm_spl = targets[i]["stm_spline"], period=targets[i]["period"]) for i in range(self.M)] )
+
+        if measure_params is None:
+            self.measure_params = MeasureParams(0.1, 3) # default 10% observation frac and 3 degree angle uncertainty
+        else:
+            self.measure_params = measure_params
 
     def reset(self):
         """

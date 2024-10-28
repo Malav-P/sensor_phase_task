@@ -25,9 +25,9 @@ def compute_coefficients(env: SpaceEnv):
 
     env.reset()
 
-    dt = 0.1*env.tstep # observation time is 10 percent of timstep 
-
-    sigma =  3 * np.pi / 180 # observation uncertainty is 3 degrees
+    dt = env.measure_params.observation_frac*env.tstep # observation time in TU
+    sigma =  env.measure_params.sigma * np.pi / 180 # observation uncertainty in radians
+    
     R_inv = 1 / sigma**2 * np.block([[np.eye(3), np.zeros(shape=(3, 3))], [np.zeros(shape=(3,3)), (0.5 * dt**2)*np.eye(3)]])
 
     information = np.zeros(shape=(env.maxsteps, env.observers.size, env.truths.size), dtype=float)

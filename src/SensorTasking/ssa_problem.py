@@ -18,6 +18,7 @@ class SSA_Problem():
         agents (ArrayLike): A array of agent initial conditions.
         agent_periods (ArrayLike): A array of agent periods.
         opt (str): the type of optimization to run. One of either "max" or "maxmin"
+        tstep (float) : the timestep of simulation in CR3BP TU.
     
     Attributes:
         ag (TargetGenerator): A generator/propagator for agent initial conditions.
@@ -43,7 +44,8 @@ class SSA_Problem():
                  target_periods: ArrayLike, 
                  agents: ArrayLike,
                  agent_periods: ArrayLike,
-                 opt: Optional[str] = "max") -> None:
+                 opt: Optional[str] = "max",
+                 tstep : Optional[float] = 0.015) -> None:
         
         self.tg = TargetGenerator(targets, periods=target_periods)
         targets = np.array([self.tg.gen_phased_ics(catalog_ID=i, num_targets=1, gen_P=False)[0] for i in range(self.tg.num_options)])
@@ -54,7 +56,7 @@ class SSA_Problem():
 
         tmp_agents = self.ag.gen_phased_ics_from([0.0] * self.num_agents)
         
-        self.tstep = 0.015
+        self.tstep = tstep
         self.period = np.min([np.min(agent_periods), np.min(target_periods)])
         self.maxsteps = int(np.floor(self.period/self.tstep))
 

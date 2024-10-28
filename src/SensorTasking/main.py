@@ -1,4 +1,3 @@
-from .ssa_problem import SSA_Problem
 from .search_methods import greedy_search, search, sga_search
 from numpy.typing import ArrayLike
 from typing import Optional

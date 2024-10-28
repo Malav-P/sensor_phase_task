@@ -269,6 +269,7 @@ def _run_multiple_ics(initial_conditions: np.ndarray[float],
     # Create the archipelago with n_islands islands
     archi = pg.archipelago()
 
+
     # Create and add each island with its corresponding initial condition
     for ic in initial_conditions:
         # Create a population with the current initial condition
@@ -281,7 +282,7 @@ def _run_multiple_ics(initial_conditions: np.ndarray[float],
         archi.push_back(pg.island(algo=algo, pop=pop))
 
     archi.evolve()
-    archi.wait()
+    archi.wait_check()
 
     champions_x = archi.get_champions_x()
     champions_f = archi.get_champions_f()

@@ -165,12 +165,16 @@ def visualize_info_vs_phase(p: SSA_Problem,
 
     plt.close(fig)
     plt.figure(fig)
+    ax = plt.gca()
+
+    plt.rcParams.update({'font.size': 16})
 
     plt.xlabel("Phase")
     plt.ylabel("f")
     plt.yscale("log")
-    plt.title(f"Objective dependence on Observer {observer} Phase")
-    plt.scatter(phases, sols, color = "blue", marker=marker, label=f"optimal")
+    plt.title(f"Objective vs. Observer {observer} Phase", wrap=True)
+    plt.scatter(phases, sols, color = "black", marker=marker, label=f"optimal")
+    
 
     
     if show_myopic:
@@ -188,7 +192,7 @@ def visualize_info_vs_phase(p: SSA_Problem,
         # print("Abs Obj Gap", abs_obj_gap)
 
         
-        plt.scatter(phases, myopic_sols, color = "red", marker=marker, label=f"myopic")
+        plt.scatter(phases, myopic_sols, color = "red", marker="x", label=f"myopic")
         if show_ROG:
             # Add a text box to show the value of rel_obj_gap
             plt.text(0.05, 0.6, f'ROG: {rel_obj_gap*100:.1f} %', transform=plt.gca().transAxes,
@@ -278,6 +282,7 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
             y = state_hist[:,idx2]
             plt.plot(x, y, color="red", linewidth=0.5)
 
+        plt.rcParams.update({'font.size': 16})
         plt.xlabel(f"{xlabel} (DU)")
         plt.ylabel(f"{ylabel} (DU)")
         plt.title("Agent/Target Orbits")
@@ -287,7 +292,7 @@ def plot_orbits(p: SSA_Problem, fig: int, projection: Optional[str] = "xy"):
         black_line = plt.Line2D((0,1),(0,0), color='k', linewidth=2)
 
         # Adding the legend
-        plt.legend([red_line, black_line], ['Agent', 'Target'])
+        plt.legend([red_line, black_line], ['Agent', 'Target'], bbox_to_anchor = [0.295, 0.655])
 
 
     plt.draw_if_interactive()
@@ -333,7 +338,7 @@ def _visualize_info_other_observers_fixed(prob: SSA_Problem, observer: int, fig_
         ax.set_ylabel("f")
         ax.set_yscale("log")
         ax.set_title(f"Fixed Obs Phase = {fixed_phases[i]}")
-        ax.scatter(phases, sols, color = "blue", marker='.', s=2)
+        ax.scatter(phases, sols, color = "black", marker='.', s=2)
 
     
     plt.tight_layout()
